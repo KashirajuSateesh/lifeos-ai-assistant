@@ -19,6 +19,7 @@ from app.schemas import (
     UpdateTaskRequest,
     UpdateTaskResponse,
     DeleteTaskResponse,
+    TaskRemindersResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -27,6 +28,7 @@ from app.services.database import (
     get_tasks_by_user,
     update_task_by_id,
     delete_task_by_id,
+    get_task_reminders_by_user
 )
 
 from datetime import datetime, timedelta, timezone
@@ -246,6 +248,9 @@ def get_tasks(user_id: str):
 def update_task(task_id: str, request: UpdateTaskRequest):
     update_data = request.model_dump(exclude_none=True)
 
+    if update_data.get("status") == "completed":
+        update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+
     if "status" in update_data:
         if update_data["status"] not in ["pending", "completed"]:
             raise HTTPException(
@@ -283,4 +288,21 @@ def delete_task(task_id: str):
         status="success",
         deleted_task=deleted_task,
         message="Task deleted successfully",
+    )
+
+@app.get("/api/tasks/reminders/{user_id}", response_model=TaskRemindersResponse)
+def get_task_reminders(user_id: str):
+    reminders = get_task_reminders_by_user(user_id)
+
+    return TaskRemindersResponse(
+        status="success",
+        user_id=user_id,
+        due_today_count=len(reminders["due_today"]),
+        upcoming_count=len(reminders["upcoming"]),
+        overdue_count=len(reminders["overdue"]),
+        follow_up_count=len(reminders["follow_up"]),
+        due_today=reminders["due_today"],
+        upcoming=reminders["upcoming"],
+        overdue=reminders["overdue"],
+        follow_up=reminders["follow_up"],
     )

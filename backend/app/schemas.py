@@ -99,3 +99,15 @@ class DeleteTaskResponse(BaseModel):
     status: str
     deleted_task: Dict[str, Any]
     message: str
+
+class TaskRemindersResponse(BaseModel):
+    status: str
+    user_id: str
+    due_today_count: int
+    upcoming_count: int
+    overdue_count: int
+    follow_up_count: int
+    due_today: List[TaskItem]
+    upcoming: List[TaskItem]
+    overdue: List[TaskItem]
+    follow_up: List[TaskItem]

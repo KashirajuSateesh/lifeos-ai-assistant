@@ -176,3 +176,65 @@ def delete_task_by_id(task_id: str) -> Dict[str, Any]:
         raise RuntimeError("Failed to delete task or task not found")
 
     return result.data[0]
+
+def get_task_reminders_by_user(user_id: str) -> Dict[str, Any]:
+    """
+    Fetches tasks grouped into reminder categories:
+    - due_today
+    - upcoming
+    - overdue
+    - follow_up
+    """
+
+    from datetime import datetime, timedelta, timezone
+
+    supabase = get_supabase_client()
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    upcoming_end = now + timedelta(days=7)
+
+    result = (
+        supabase.table("tasks")
+        .select("*")
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    tasks = result.data or []
+
+    due_today = []
+    upcoming = []
+    overdue = []
+    follow_up = []
+
+    for task in tasks:
+        if task.get("status") == "completed":
+            continue
+
+        due_date_raw = task.get("due_date")
+
+        if not due_date_raw:
+            continue
+
+        due_date = datetime.fromisoformat(due_date_raw.replace("Z", "+00:00"))
+
+        if due_date < now:
+            overdue.append(task)
+
+        elif today_start <= due_date <= today_end:
+            due_today.append(task)
+
+        elif now < due_date <= upcoming_end:
+            upcoming.append(task)
+
+        if task.get("follow_up_required") and due_date <= now:
+            follow_up.append(task)
+
+    return {
+        "due_today": due_today,
+        "upcoming": upcoming,
+        "overdue": overdue,
+        "follow_up": follow_up,
+    }
