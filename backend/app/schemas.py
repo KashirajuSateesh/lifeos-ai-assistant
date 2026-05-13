@@ -55,3 +55,47 @@ class UpdateExpenseResponse(BaseModel):
     status: str
     updated_expense: Dict[str, Any]
     message: str
+
+
+# Reminder Task Schemas
+
+class TaskItem(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    description: Optional[str] = None
+    status: str
+    priority: str
+    due_date: Optional[str] = None
+    reminder_at: Optional[str] = None
+    created_at: str
+
+
+class TasksResponse(BaseModel):
+    status: str
+    user_id: str
+    count: int
+    pending_count: int
+    completed_count: int
+    tasks: List[TaskItem]
+
+
+class UpdateTaskRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[str] = None
+    reminder_at: Optional[str] = None
+
+
+class UpdateTaskResponse(BaseModel):
+    status: str
+    updated_task: Dict[str, Any]
+    message: str
+
+
+class DeleteTaskResponse(BaseModel):
+    status: str
+    deleted_task: Dict[str, Any]
+    message: str

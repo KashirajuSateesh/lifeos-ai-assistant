@@ -101,3 +101,78 @@ def update_expense_by_id(expense_id: str, update_data: Dict[str, Any]) -> Dict[s
         raise RuntimeError("Failed to update expense or expense not found")
 
     return result.data[0]
+
+# Reminder Task Code
+
+def save_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Saves one task record into the tasks table.
+    """
+
+    supabase = get_supabase_client()
+
+    result = supabase.table("tasks").insert(task_data).execute()
+
+    if not result.data:
+        raise RuntimeError("Failed to save task to Supabase")
+
+    return result.data[0]
+
+
+def get_tasks_by_user(user_id: str) -> list[Dict[str, Any]]:
+    """
+    Fetches all tasks for a specific user.
+    Latest tasks appear first.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("tasks")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return result.data or []
+
+
+def update_task_by_id(task_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Updates one task by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("tasks")
+        .update(update_data)
+        .eq("id", task_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to update task or task not found")
+
+    return result.data[0]
+
+
+def delete_task_by_id(task_id: str) -> Dict[str, Any]:
+    """
+    Deletes one task by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("tasks")
+        .delete()
+        .eq("id", task_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to delete task or task not found")
+
+    return result.data[0]

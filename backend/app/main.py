@@ -15,11 +15,18 @@ from app.schemas import (
     DeleteExpenseResponse,
     UpdateExpenseRequest,
     UpdateExpenseResponse,
+    TasksResponse,
+    UpdateTaskRequest,
+    UpdateTaskResponse,
+    DeleteTaskResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
     delete_expense_by_id,
     update_expense_by_id,
+    get_tasks_by_user,
+    update_task_by_id,
+    delete_task_by_id,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -72,7 +79,11 @@ def chat(request: ChatRequest):
         )
 
     elif selected_agent == "task_agent":
-        agent_result = handle_task_message(request.message, extracted_data)
+        agent_result = handle_task_message(
+        request.message,
+        extracted_data,
+        user_id=request.user_id,
+    )
 
     elif selected_agent == "journal_agent":
         agent_result = handle_journal_message(request.message, extracted_data)
@@ -210,4 +221,66 @@ def update_expense(expense_id: str, request: UpdateExpenseRequest):
         status="success",
         updated_expense=updated_expense,
         message="Expense updated successfully",
+    )
+
+
+# Reminder Task Endpoints or API for Task Agent
+@app.get("/api/tasks/{user_id}", response_model=TasksResponse)
+def get_tasks(user_id: str):
+    tasks = get_tasks_by_user(user_id)
+
+    pending_count = sum(1 for task in tasks if task["status"] == "pending")
+    completed_count = sum(1 for task in tasks if task["status"] == "completed")
+
+    return TasksResponse(
+        status="success",
+        user_id=user_id,
+        count=len(tasks),
+        pending_count=pending_count,
+        completed_count=completed_count,
+        tasks=tasks,
+    )
+
+
+@app.patch("/api/tasks/{task_id}", response_model=UpdateTaskResponse)
+def update_task(task_id: str, request: UpdateTaskRequest):
+    update_data = request.model_dump(exclude_none=True)
+
+    if "status" in update_data:
+        if update_data["status"] not in ["pending", "completed"]:
+            raise HTTPException(
+                status_code=400,
+                detail="status must be either pending or completed",
+            )
+
+    if "priority" in update_data:
+        if update_data["priority"] not in ["low", "medium", "high"]:
+            raise HTTPException(
+                status_code=400,
+                detail="priority must be low, medium, or high",
+            )
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No update fields provided",
+        )
+
+    updated_task = update_task_by_id(task_id, update_data)
+
+    return UpdateTaskResponse(
+        status="success",
+        updated_task=updated_task,
+        message="Task updated successfully",
+    )
+
+
+@app.delete("/api/tasks/{task_id}", response_model=DeleteTaskResponse)
+def delete_task(task_id: str):
+    deleted_task = delete_task_by_id(task_id)
+
+    return DeleteTaskResponse(
+        status="success",
+        deleted_task=deleted_task,
+        message="Task deleted successfully",
     )
