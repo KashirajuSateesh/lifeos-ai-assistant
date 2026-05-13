@@ -62,8 +62,11 @@ export default function Home() {
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
   const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [expensesLoading, setExpensesLoading] = useState(false);
+  
 
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -93,6 +96,36 @@ export default function Home() {
   async function handlePeriodChange(period: PeriodFilter) {
     setSelectedPeriod(period);
     await fetchExpenses(period);
+  }
+
+  async function handleCustomDateSearch() {
+    if (!customStartDate || !customEndDate) {
+      alert("Please select both start date and end date.");
+      return;
+    }
+
+    setSelectedPeriod("all");
+    setExpensesLoading(true);
+
+    try {
+      const startDateTime = `${customStartDate}T00:00:00.000Z`;
+      const endDateTime = `${customEndDate}T23:59:59.999Z`;
+
+      const response = await fetch(
+        `${backendUrl}/api/expenses/${DEMO_USER_ID}?start_date=${startDateTime}&end_date=${endDateTime}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch custom date expenses");
+      }
+
+      const data: ExpensesResponse = await response.json();
+      setExpensesData(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setExpensesLoading(false);
+    }
   }
 
   async function sendMessage() {
@@ -265,6 +298,39 @@ export default function Home() {
             ))}
           </div>
 
+          <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <p className="mb-3 text-sm font-medium text-slate-300">Custom Date Range</p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Start Date</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(event) => setCustomStartDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">End Date</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(event) => setCustomEndDate(event.target.value)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleCustomDateSearch}
+              className="mt-3 w-full rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600"
+            >
+              Apply Custom Range
+            </button>
+          </div>
+
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Money In</p>
@@ -291,7 +357,11 @@ export default function Home() {
           <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800 p-4 text-sm">
             <div className="flex justify-between gap-4">
               <span className="text-slate-400">Selected Period</span>
-              <span className="capitalize">{selectedPeriod.replace("_", " ")}</span>
+              <span className="capitalize">
+                {expensesData?.start_date && expensesData?.end_date && selectedPeriod === "all"
+                  ? "Custom Range / All"
+                  : selectedPeriod.replace("_", " ")}
+              </span>
             </div>
 
             <div className="mt-2 flex justify-between gap-4">
