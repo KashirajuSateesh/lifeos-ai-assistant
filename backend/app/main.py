@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.schemas import ChatRequest, ChatResponse
 from app.agents.orchestrator import classify_intent
+from app.agents.expense_agent import handle_expense_message
+from app.agents.task_agent import handle_task_message
+from app.agents.journal_agent import handle_journal_message
+from app.agents.places_agent import handle_places_message
 
 app = FastAPI(
     title="LifeOS AI Assistant API",
@@ -39,19 +43,27 @@ def health_check():
 def chat(request: ChatRequest):
     routing_result = classify_intent(request.message)
 
-    selected_agent = routing_result["selected_agent"]
     intent = routing_result["intent"]
+    selected_agent = routing_result["selected_agent"]
+    extracted_data = routing_result.get("extracted_data", {})
 
     if selected_agent == "expense_agent":
-        response_text = "Expense Agent selected. I will handle expense logging soon."
+        agent_result = handle_expense_message(request.message, extracted_data)
+
     elif selected_agent == "task_agent":
-        response_text = "Task Agent selected. I will handle reminders and todos soon."
+        agent_result = handle_task_message(request.message, extracted_data)
+
     elif selected_agent == "journal_agent":
-        response_text = "Journal Agent selected. I will save and summarize journal entries soon."
+        agent_result = handle_journal_message(request.message, extracted_data)
+
     elif selected_agent == "places_agent":
-        response_text = "Places Agent selected. I will save favorite and want-to-visit places soon."
+        agent_result = handle_places_message(request.message, extracted_data)
+
     else:
-        response_text = "I received your message. I will handle general conversation soon."
+        agent_result = {
+            "response": "Orchestrator: I received your message. Soon I will handle general conversation too.",
+            "extracted_data": extracted_data,
+        }
 
     return ChatResponse(
         status="success",
@@ -59,6 +71,6 @@ def chat(request: ChatRequest):
         message_received=request.message,
         intent=intent,
         selected_agent=selected_agent,
-        extracted_data=routing_result.get("extracted_data", {}),
-        response=response_text,
+        extracted_data=agent_result.get("extracted_data", {}),
+        response=agent_result["response"],
     )
