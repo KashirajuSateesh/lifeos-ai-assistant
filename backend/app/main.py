@@ -48,7 +48,11 @@ def chat(request: ChatRequest):
     extracted_data = routing_result.get("extracted_data", {})
 
     if selected_agent == "expense_agent":
-        agent_result = handle_expense_message(request.message, extracted_data)
+        agent_result = handle_expense_message(
+            request.message,
+            extracted_data,
+            user_id=request.user_id,
+        )
 
     elif selected_agent == "task_agent":
         agent_result = handle_task_message(request.message, extracted_data)
