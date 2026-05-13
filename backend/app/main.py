@@ -8,6 +8,9 @@ from app.agents.task_agent import handle_task_message
 from app.agents.journal_agent import handle_journal_message
 from app.agents.places_agent import handle_places_message
 
+from app.schemas import ChatRequest, ChatResponse, ExpensesResponse
+from app.services.database import get_expenses_by_user
+
 app = FastAPI(
     title="LifeOS AI Assistant API",
     description="Backend API for the LifeOS Personal AI Assistant using a multi-agent system.",
@@ -77,4 +80,29 @@ def chat(request: ChatRequest):
         selected_agent=selected_agent,
         extracted_data=agent_result.get("extracted_data", {}),
         response=agent_result["response"],
+    )
+
+@app.get("/api/expenses/{user_id}", response_model=ExpensesResponse)
+def get_expenses(user_id: str):
+    expenses = get_expenses_by_user(user_id)
+
+    total_debit = sum(
+        float(expense["amount"])
+        for expense in expenses
+        if expense["transaction_type"] == "debit"
+    )
+
+    total_credit = sum(
+        float(expense["amount"])
+        for expense in expenses
+        if expense["transaction_type"] == "credit"
+    )
+
+    return ExpensesResponse(
+        status="success",
+        user_id=user_id,
+        count=len(expenses),
+        total_debit=total_debit,
+        total_credit=total_credit,
+        expenses=expenses,
     )

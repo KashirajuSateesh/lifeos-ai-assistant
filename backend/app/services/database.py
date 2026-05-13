@@ -34,3 +34,21 @@ def save_expense(expense_data: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("Failed to save expense to Supabase")
 
     return result.data[0]
+
+def get_expenses_by_user(user_id: str) -> list[Dict[str, Any]]:
+    """
+    Fetches all expenses for a specific user.
+    Latest expenses appear first.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("expenses")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    return result.data or []

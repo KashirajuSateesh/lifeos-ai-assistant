@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class ChatRequest(BaseModel):
@@ -15,3 +15,22 @@ class ChatResponse(BaseModel):
     selected_agent: Optional[str] = None
     extracted_data: Optional[Dict[str, Any]] = None
     response: str
+
+
+class ExpenseItem(BaseModel):
+    id: str
+    user_id: str
+    amount: float
+    category: str
+    description: Optional[str] = None
+    transaction_type: str
+    created_at: str
+
+
+class ExpensesResponse(BaseModel):
+    status: str
+    user_id: str
+    count: int
+    total_debit: float
+    total_credit: float
+    expenses: List[ExpenseItem]
