@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AppShell from "@/components/layout/AppShell";
 
 import {
   deleteExpense as deleteExpenseApi,
@@ -323,7 +324,7 @@ export default function Home() {
   const expenseData = chatResponse?.extracted_data;
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
+    <AppShell>
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-6">
@@ -953,6 +954,6 @@ export default function Home() {
           )}
         </section>
       </div>
-    </main>
+    </AppShell>
   );
 }
