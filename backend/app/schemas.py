@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any
 
 
 class ChatRequest(BaseModel):
@@ -10,4 +11,7 @@ class ChatResponse(BaseModel):
     status: str
     user_id: str
     message_received: str
+    intent: Optional[str] = None
+    selected_agent: Optional[str] = None
+    extracted_data: Optional[Dict[str, Any]] = None
     response: str
