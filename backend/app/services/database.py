@@ -82,3 +82,22 @@ def delete_expense_by_id(expense_id: str) -> Dict[str, Any]:
         raise RuntimeError("Failed to delete expense or expense not found")
 
     return result.data[0]
+
+def update_expense_by_id(expense_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Updates one expense by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("expenses")
+        .update(update_data)
+        .eq("id", expense_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to update expense or expense not found")
+
+    return result.data[0]

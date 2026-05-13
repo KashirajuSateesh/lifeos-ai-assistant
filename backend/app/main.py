@@ -8,8 +8,19 @@ from app.agents.task_agent import handle_task_message
 from app.agents.journal_agent import handle_journal_message
 from app.agents.places_agent import handle_places_message
 
-from app.schemas import ChatRequest, ChatResponse, ExpensesResponse, DeleteExpenseResponse
-from app.services.database import get_expenses_by_user, delete_expense_by_id
+from app.schemas import (
+    ChatRequest,
+    ChatResponse,
+    ExpensesResponse,
+    DeleteExpenseResponse,
+    UpdateExpenseRequest,
+    UpdateExpenseResponse,
+)
+from app.services.database import (
+    get_expenses_by_user,
+    delete_expense_by_id,
+    update_expense_by_id,
+)
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -174,4 +185,29 @@ def delete_expense(expense_id: str):
         status="success",
         deleted_expense=deleted_expense,
         message="Expense deleted successfully",
+    )
+
+@app.patch("/api/expenses/{expense_id}", response_model=UpdateExpenseResponse)
+def update_expense(expense_id: str, request: UpdateExpenseRequest):
+    update_data = request.model_dump(exclude_none=True)
+
+    if "transaction_type" in update_data:
+        if update_data["transaction_type"] not in ["debit", "credit"]:
+            raise HTTPException(
+                status_code=400,
+                detail="transaction_type must be either debit or credit",
+            )
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No update fields provided",
+        )
+
+    updated_expense = update_expense_by_id(expense_id, update_data)
+
+    return UpdateExpenseResponse(
+        status="success",
+        updated_expense=updated_expense,
+        message="Expense updated successfully",
     )

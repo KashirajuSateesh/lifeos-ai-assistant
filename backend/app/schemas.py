@@ -43,3 +43,15 @@ class DeleteExpenseResponse(BaseModel):
     status: str
     deleted_expense: Dict[str, Any]
     message: str
+
+class UpdateExpenseRequest(BaseModel):
+    amount: Optional[float] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    transaction_type: Optional[str] = None
+
+
+class UpdateExpenseResponse(BaseModel):
+    status: str
+    updated_expense: Dict[str, Any]
+    message: str
