@@ -47,6 +47,29 @@ type ExpensesResponse = {
 
 type PeriodFilter = "all" | "today" | "this_week" | "this_month" | "this_year";
 
+// Reminder Task Types
+
+type TaskItem = {
+  id: string;
+  user_id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority: string;
+  due_date?: string | null;
+  reminder_at?: string | null;
+  created_at: string;
+};
+
+type TasksResponse = {
+  status: string;
+  user_id: string;
+  count: number;
+  pending_count: number;
+  completed_count: number;
+  tasks: TaskItem[];
+};
+
 const DEMO_USER_ID = "demo-user";
 
 const periodOptions: { label: string; value: PeriodFilter }[] = [
@@ -73,6 +96,10 @@ export default function Home() {
   const [editTransactionType, setEditTransactionType] = useState<"debit" | "credit">(
     "debit"
   );
+
+  //Reminder Task States
+  const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [expensesLoading, setExpensesLoading] = useState(false);
@@ -168,6 +195,9 @@ export default function Home() {
       if (data.selected_agent === "expense_agent") {
         await fetchExpenses(selectedPeriod);
       }
+      if (data.selected_agent === "task_agent") {
+        await fetchTasks();
+      }
     } catch (error) {
       console.error(error);
       setChatResponse({
@@ -259,11 +289,77 @@ export default function Home() {
 
   useEffect(() => {
     fetchExpenses("all");
+    fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isExpenseAgent = chatResponse?.selected_agent === "expense_agent";
   const expenseData = chatResponse?.extracted_data;
+
+
+  // Reminder Task Functions (To be implemented similarly to expenses)
+  async function fetchTasks() {
+    setTasksLoading(true);
+
+    try {
+      const response = await fetch(`${backendUrl}/api/tasks/${DEMO_USER_ID}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch tasks");
+      }
+
+      const data: TasksResponse = await response.json();
+      setTasksData(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setTasksLoading(false);
+    }
+  }
+
+  async function markTaskCompleted(taskId: string) {
+    try {
+      const response = await fetch(`${backendUrl}/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: "completed",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update task");
+      }
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to complete task. Please try again.");
+    }
+  }
+
+  async function deleteTask(taskId: string) {
+    const confirmDelete = window.confirm("Are you sure you want to delete this task?");
+
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${backendUrl}/api/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete task");
+      }
+
+      await fetchTasks();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete task. Please try again.");
+    }
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
@@ -627,6 +723,108 @@ export default function Home() {
             </p>
           )}
         </section>
+
+        {/* Reminder Tasks Section */}
+        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl lg:col-span-2">
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-blue-400">Tasks</p>
+              <h2 className="text-2xl font-bold">Todo & Reminders</h2>
+              <p className="mt-2 text-slate-400">
+                Saved tasks are created by the Task Agent and loaded from Supabase.
+              </p>
+            </div>
+
+            <button
+              onClick={fetchTasks}
+              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="text-sm text-slate-400">Total Tasks</p>
+              <p className="mt-1 text-xl font-bold">{tasksData?.count ?? 0}</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="text-sm text-slate-400">Pending</p>
+              <p className="mt-1 text-xl font-bold">{tasksData?.pending_count ?? 0}</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="text-sm text-slate-400">Completed</p>
+              <p className="mt-1 text-xl font-bold">{tasksData?.completed_count ?? 0}</p>
+            </div>
+          </div>
+
+          {tasksLoading ? (
+            <p className="text-slate-400">Loading tasks...</p>
+          ) : tasksData && tasksData.tasks.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {tasksData.tasks.slice(0, 10).map((task) => (
+                <div
+                  key={task.id}
+                  className="rounded-xl border border-slate-700 bg-slate-800 p-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">{task.title}</p>
+                        <span className="rounded-full border border-slate-600 px-2 py-1 text-xs capitalize text-slate-300">
+                          {task.priority}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs capitalize ${
+                            task.status === "completed"
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-yellow-500/20 text-yellow-300"
+                          }`}
+                        >
+                          {task.status}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-sm text-slate-400">{task.description}</p>
+
+                      {task.due_date && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Due: {new Date(task.due_date).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      {task.status !== "completed" && (
+                        <button
+                          onClick={() => markTaskCompleted(task.id)}
+                          className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                        >
+                          Complete
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-400">
+              No tasks yet. Try: Remind me to pay rent tomorrow.
+            </p>
+          )}
+        </section>
+
+
       </div>
     </main>
   );
