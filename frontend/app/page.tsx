@@ -98,6 +98,27 @@ export default function Home() {
     await fetchExpenses(period);
   }
 
+  async function deleteExpense(expenseId: string) {
+    const confirmDelete = window.confirm("Are you sure you want to delete this transaction?");
+
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${backendUrl}/api/expenses/${expenseId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete expense");
+      }
+
+      await fetchExpenses(selectedPeriod);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete transaction. Please try again.");
+    }
+  }
+
   async function handleCustomDateSearch() {
     if (!customStartDate || !customEndDate) {
       alert("Please select both start date and end date.");
@@ -401,9 +422,17 @@ export default function Home() {
                         {expense.transaction_type === "credit" ? "+" : "-"}$
                         {Number(expense.amount).toFixed(2)}
                       </p>
+
                       <p className="mt-1 text-xs capitalize text-slate-400">
                         {expense.transaction_type}
                       </p>
+
+                      <button
+                        onClick={() => deleteExpense(expense.id)}
+                        className="mt-3 rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 </div>

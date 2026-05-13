@@ -63,3 +63,22 @@ def get_expenses_by_user(
     result = query.order("created_at", desc=True).execute()
 
     return result.data or []
+
+def delete_expense_by_id(expense_id: str) -> Dict[str, Any]:
+    """
+    Deletes one expense by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("expenses")
+        .delete()
+        .eq("id", expense_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to delete expense or expense not found")
+
+    return result.data[0]

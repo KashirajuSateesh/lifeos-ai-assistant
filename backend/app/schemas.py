@@ -38,3 +38,8 @@ class ExpensesResponse(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     expenses: List[ExpenseItem]
+
+class DeleteExpenseResponse(BaseModel):
+    status: str
+    deleted_expense: Dict[str, Any]
+    message: str

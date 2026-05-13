@@ -8,8 +8,8 @@ from app.agents.task_agent import handle_task_message
 from app.agents.journal_agent import handle_journal_message
 from app.agents.places_agent import handle_places_message
 
-from app.schemas import ChatRequest, ChatResponse, ExpensesResponse
-from app.services.database import get_expenses_by_user
+from app.schemas import ChatRequest, ChatResponse, ExpensesResponse, DeleteExpenseResponse
+from app.services.database import get_expenses_by_user, delete_expense_by_id
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -164,4 +164,14 @@ def get_expenses(
         start_date=final_start_date,
         end_date=final_end_date,
         expenses=expenses,
+    )
+
+@app.delete("/api/expenses/{expense_id}", response_model=DeleteExpenseResponse)
+def delete_expense(expense_id: str):
+    deleted_expense = delete_expense_by_id(expense_id)
+
+    return DeleteExpenseResponse(
+        status="success",
+        deleted_expense=deleted_expense,
+        message="Expense deleted successfully",
     )
