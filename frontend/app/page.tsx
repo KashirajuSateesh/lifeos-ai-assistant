@@ -2,75 +2,28 @@
 
 import { useEffect, useState } from "react";
 
-type ExtractedData = {
-  id?: string;
-  user_id?: string;
-  amount?: number | null;
-  category?: string;
-  description?: string;
-  transaction_type?: string;
-  created_at?: string;
-};
+import {
+  deleteExpense as deleteExpenseApi,
+  deleteTask as deleteTaskApi,
+  getExpenses,
+  getTaskReminders,
+  getTasks,
+  sendChatMessage,
+  updateExpense as updateExpenseApi,
+  updateTask,
+} from "@/lib/api";
 
-type ChatResponse = {
-  status: string;
-  user_id: string;
-  message_received: string;
-  intent?: string | null;
-  selected_agent?: string | null;
-  extracted_data?: ExtractedData | null;
-  response: string;
-};
-
-type ExpenseItem = {
-  id: string;
-  user_id: string;
-  amount: number;
-  category: string;
-  description?: string | null;
-  transaction_type: string;
-  created_at: string;
-};
-
-type ExpensesResponse = {
-  status: string;
-  user_id: string;
-  count: number;
-  total_debit: number;
-  total_credit: number;
-  net_balance: number;
-  period?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  expenses: ExpenseItem[];
-};
-
-type PeriodFilter = "all" | "today" | "this_week" | "this_month" | "this_year";
-
-// Reminder Task Types
-
-type TaskItem = {
-  id: string;
-  user_id: string;
-  title: string;
-  description?: string | null;
-  status: string;
-  priority: string;
-  due_date?: string | null;
-  reminder_at?: string | null;
-  created_at: string;
-};
-
-type TasksResponse = {
-  status: string;
-  user_id: string;
-  count: number;
-  pending_count: number;
-  completed_count: number;
-  tasks: TaskItem[];
-};
-
-const DEMO_USER_ID = "demo-user";
+import {
+  ChatResponse,
+  ExpenseCategoryFilter,
+  ExpenseItem,
+  ExpensesResponse,
+  PeriodFilter,
+  TaskItem,
+  TaskPriorityFilter,
+  TaskRemindersResponse,
+  TasksResponse,
+} from "@/lib/types";
 
 const periodOptions: { label: string; value: PeriodFilter }[] = [
   { label: "All", value: "all" },
@@ -80,50 +33,78 @@ const periodOptions: { label: string; value: PeriodFilter }[] = [
   { label: "This Year", value: "this_year" },
 ];
 
+const expenseCategoryOptions: {
+  label: string;
+  value: ExpenseCategoryFilter;
+}[] = [
+  { label: "All Categories", value: "all" },
+  { label: "Food", value: "food" },
+  { label: "Groceries", value: "groceries" },
+  { label: "Transport", value: "transport" },
+  { label: "Shopping", value: "shopping" },
+  { label: "Rent", value: "rent" },
+  { label: "Utilities", value: "utilities" },
+  { label: "Health", value: "health" },
+  { label: "Entertainment", value: "entertainment" },
+  { label: "Income", value: "income" },
+  { label: "Other", value: "other" },
+];
+
+const taskPriorityOptions: { label: string; value: TaskPriorityFilter }[] = [
+  { label: "All Priorities", value: "all" },
+  { label: "Low", value: "low" },
+  { label: "Medium", value: "medium" },
+  { label: "High", value: "high" },
+];
+
 export default function Home() {
   const [message, setMessage] = useState("");
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
-  const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(null);
 
+  const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(
+    null
+  );
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>("all");
+  const [selectedExpenseCategory, setSelectedExpenseCategory] =
+    useState<ExpenseCategoryFilter>("all");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+
+  const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
+  const [taskReminders, setTaskReminders] =
+    useState<TaskRemindersResponse | null>(null);
+  const [selectedTaskPriority, setSelectedTaskPriority] =
+    useState<TaskPriorityFilter>("all");
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [editTransactionType, setEditTransactionType] = useState<"debit" | "credit">(
-    "debit"
-  );
-
-  //Reminder Task States
-  const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
-  const [tasksLoading, setTasksLoading] = useState(false);
+  const [editTransactionType, setEditTransactionType] = useState<
+    "debit" | "credit"
+  >("debit");
 
   const [loading, setLoading] = useState(false);
   const [expensesLoading, setExpensesLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [remindersLoading, setRemindersLoading] = useState(false);
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-
-  async function fetchExpenses(period: PeriodFilter = selectedPeriod) {
+  async function fetchExpenses(
+    period: PeriodFilter = selectedPeriod,
+    category: ExpenseCategoryFilter = selectedExpenseCategory
+  ) {
     setExpensesLoading(true);
 
     try {
-      const periodQuery = period === "all" ? "" : `?period=${period}`;
+      const data = await getExpenses({
+        period,
+        category,
+      });
 
-      const response = await fetch(
-        `${backendUrl}/api/expenses/${DEMO_USER_ID}${periodQuery}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch expenses");
-      }
-
-      const data: ExpensesResponse = await response.json();
       setExpensesData(data);
     } catch (error) {
       console.error(error);
+      alert("Failed to fetch expenses.");
     } finally {
       setExpensesLoading(false);
     }
@@ -131,9 +112,14 @@ export default function Home() {
 
   async function handlePeriodChange(period: PeriodFilter) {
     setSelectedPeriod(period);
-    setCustomStartDate("");
-    setCustomEndDate("");
-    await fetchExpenses(period);
+    await fetchExpenses(period, selectedExpenseCategory);
+  }
+
+  async function handleExpenseCategoryChange(
+    category: ExpenseCategoryFilter
+  ) {
+    setSelectedExpenseCategory(category);
+    await fetchExpenses(selectedPeriod, category);
   }
 
   async function handleCustomDateSearch() {
@@ -142,95 +128,25 @@ export default function Home() {
       return;
     }
 
-    setSelectedPeriod("all");
     setExpensesLoading(true);
 
     try {
       const startDateTime = `${customStartDate}T00:00:00.000Z`;
       const endDateTime = `${customEndDate}T23:59:59.999Z`;
 
-      const response = await fetch(
-        `${backendUrl}/api/expenses/${DEMO_USER_ID}?start_date=${startDateTime}&end_date=${endDateTime}`
-      );
+      const data = await getExpenses({
+        startDate: startDateTime,
+        endDate: endDateTime,
+        category: selectedExpenseCategory,
+      });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch custom date expenses");
-      }
-
-      const data: ExpensesResponse = await response.json();
+      setSelectedPeriod("all");
       setExpensesData(data);
     } catch (error) {
       console.error(error);
+      alert("Failed to fetch custom date expenses.");
     } finally {
       setExpensesLoading(false);
-    }
-  }
-
-  async function sendMessage() {
-    if (!message.trim()) return;
-
-    setLoading(true);
-    setChatResponse(null);
-
-    try {
-      const response = await fetch(`${backendUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          user_id: DEMO_USER_ID,
-          message: message,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Backend request failed");
-      }
-
-      const data: ChatResponse = await response.json();
-      setChatResponse(data);
-      setMessage("");
-
-      if (data.selected_agent === "expense_agent") {
-        await fetchExpenses(selectedPeriod);
-      }
-      if (data.selected_agent === "task_agent") {
-        await fetchTasks();
-      }
-    } catch (error) {
-      console.error(error);
-      setChatResponse({
-        status: "error",
-        user_id: DEMO_USER_ID,
-        message_received: message,
-        response: "Something went wrong while connecting to the backend.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function deleteExpense(expenseId: string) {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this transaction?"
-    );
-
-    if (!confirmDelete) return;
-
-    try {
-      const response = await fetch(`${backendUrl}/api/expenses/${expenseId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete expense");
-      }
-
-      await fetchExpenses(selectedPeriod);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to delete transaction. Please try again.");
     }
   }
 
@@ -262,78 +178,78 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch(`${backendUrl}/api/expenses/${expenseId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: Number(editAmount),
-          category: editCategory,
-          description: editDescription,
-          transaction_type: editTransactionType,
-        }),
+      await updateExpenseApi(expenseId, {
+        amount: Number(editAmount),
+        category: editCategory,
+        description: editDescription,
+        transaction_type: editTransactionType,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update expense");
-      }
-
       cancelEditingExpense();
-      await fetchExpenses(selectedPeriod);
+      await fetchExpenses(selectedPeriod, selectedExpenseCategory);
     } catch (error) {
       console.error(error);
       alert("Failed to update transaction. Please try again.");
     }
   }
 
-  useEffect(() => {
-    fetchExpenses("all");
-    fetchTasks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  async function deleteExpense(expenseId: string) {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this transaction?"
+    );
 
-  const isExpenseAgent = chatResponse?.selected_agent === "expense_agent";
-  const expenseData = chatResponse?.extracted_data;
+    if (!confirmDelete) return;
 
+    try {
+      await deleteExpenseApi(expenseId);
+      await fetchExpenses(selectedPeriod, selectedExpenseCategory);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete transaction. Please try again.");
+    }
+  }
 
-  // Reminder Task Functions (To be implemented similarly to expenses)
-  async function fetchTasks() {
+  async function fetchTasks(priority: TaskPriorityFilter = selectedTaskPriority) {
     setTasksLoading(true);
 
     try {
-      const response = await fetch(`${backendUrl}/api/tasks/${DEMO_USER_ID}`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch tasks");
-      }
-
-      const data: TasksResponse = await response.json();
+      const data = await getTasks(priority);
       setTasksData(data);
     } catch (error) {
       console.error(error);
+      alert("Failed to fetch tasks.");
     } finally {
       setTasksLoading(false);
     }
   }
 
+  async function fetchTaskReminders() {
+    setRemindersLoading(true);
+
+    try {
+      const data = await getTaskReminders();
+      setTaskReminders(data);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to fetch task reminders.");
+    } finally {
+      setRemindersLoading(false);
+    }
+  }
+
+  async function handleTaskPriorityChange(priority: TaskPriorityFilter) {
+    setSelectedTaskPriority(priority);
+    await fetchTasks(priority);
+  }
+
   async function markTaskCompleted(taskId: string) {
     try {
-      const response = await fetch(`${backendUrl}/api/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: "completed",
-        }),
+      await updateTask(taskId, {
+        status: "completed",
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update task");
-      }
-
-      await fetchTasks();
+      await fetchTasks(selectedTaskPriority);
+      await fetchTaskReminders();
     } catch (error) {
       console.error(error);
       alert("Failed to complete task. Please try again.");
@@ -341,25 +257,70 @@ export default function Home() {
   }
 
   async function deleteTask(taskId: string) {
-    const confirmDelete = window.confirm("Are you sure you want to delete this task?");
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this task?"
+    );
 
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`${backendUrl}/api/tasks/${taskId}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete task");
-      }
-
-      await fetchTasks();
+      await deleteTaskApi(taskId);
+      await fetchTasks(selectedTaskPriority);
+      await fetchTaskReminders();
     } catch (error) {
       console.error(error);
       alert("Failed to delete task. Please try again.");
     }
   }
+
+  async function sendMessage() {
+    if (!message.trim()) return;
+
+    setLoading(true);
+    setChatResponse(null);
+
+    try {
+      const data = await sendChatMessage(message);
+
+      setChatResponse(data);
+      setMessage("");
+
+      if (data.selected_agent === "expense_agent") {
+        await fetchExpenses(selectedPeriod, selectedExpenseCategory);
+      }
+
+      if (data.selected_agent === "task_agent") {
+        await fetchTasks(selectedTaskPriority);
+        await fetchTaskReminders();
+      }
+    } catch (error) {
+      console.error(error);
+
+      setChatResponse({
+        status: "error",
+        user_id: "demo-user",
+        message_received: message,
+        response: "Something went wrong while connecting to the backend.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      fetchExpenses("all", "all");
+      fetchTasks("all");
+      fetchTaskReminders();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+    // The first load should run once on mount with the default filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isExpenseAgent = chatResponse?.selected_agent === "expense_agent";
+  const expenseData = chatResponse?.extracted_data;
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
@@ -377,7 +338,7 @@ export default function Home() {
           <div className="space-y-3">
             <textarea
               className="min-h-28 w-full rounded-xl border border-slate-700 bg-slate-800 p-3 text-white outline-none focus:border-blue-500"
-              placeholder="Try: I spent $25 on lunch or I got paid $1500 today"
+              placeholder="Try: I spent $25 on lunch or remind me to pay rent tomorrow"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />
@@ -394,7 +355,9 @@ export default function Home() {
           {chatResponse && (
             <div className="mt-6 space-y-4">
               <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <p className="mb-1 text-sm text-slate-400">Assistant Response</p>
+                <p className="mb-1 text-sm text-slate-400">
+                  Assistant Response
+                </p>
                 <p>{chatResponse.response}</p>
               </div>
 
@@ -457,12 +420,15 @@ export default function Home() {
               <p className="text-sm font-medium text-blue-400">Expenses</p>
               <h2 className="text-2xl font-bold">Money Overview</h2>
               <p className="mt-2 text-slate-400">
-                Track money in, money out, and net balance by time period.
+                Track money in, money out, and net balance by time period and
+                category.
               </p>
             </div>
 
             <button
-              onClick={() => fetchExpenses(selectedPeriod)}
+              onClick={() =>
+                fetchExpenses(selectedPeriod, selectedExpenseCategory)
+              }
               className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
             >
               Refresh
@@ -475,9 +441,7 @@ export default function Home() {
                 key={option.value}
                 onClick={() => handlePeriodChange(option.value)}
                 className={`rounded-full px-3 py-2 text-sm transition ${
-                  selectedPeriod === option.value &&
-                  !expensesData?.start_date &&
-                  !expensesData?.end_date
+                  selectedPeriod === option.value
                     ? "bg-blue-600 text-white"
                     : "border border-slate-700 text-slate-300 hover:bg-slate-800"
                 }`}
@@ -485,6 +449,28 @@ export default function Home() {
                 {option.label}
               </button>
             ))}
+          </div>
+
+          <div className="mb-5">
+            <label className="mb-2 block text-sm text-slate-400">
+              Filter by Category
+            </label>
+
+            <select
+              value={selectedExpenseCategory}
+              onChange={(event) =>
+                handleExpenseCategoryChange(
+                  event.target.value as ExpenseCategoryFilter
+                )
+              }
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+            >
+              {expenseCategoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800 p-4">
@@ -529,27 +515,21 @@ export default function Home() {
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Money In</p>
-              <p className="mt-1 text-xl font-bold text-emerald-400">
+              <p className="mt-1 text-xl font-bold">
                 ${expensesData?.total_credit?.toFixed(2) ?? "0.00"}
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Money Out</p>
-              <p className="mt-1 text-xl font-bold text-rose-400">
+              <p className="mt-1 text-xl font-bold">
                 ${expensesData?.total_debit?.toFixed(2) ?? "0.00"}
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Net Balance</p>
-              <p
-                className={`mt-1 text-xl font-bold ${
-                  (expensesData?.net_balance ?? 0) >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                }`}
-              >
+              <p className="mt-1 text-xl font-bold">
                 ${expensesData?.net_balance?.toFixed(2) ?? "0.00"}
               </p>
             </div>
@@ -559,11 +539,14 @@ export default function Home() {
             <div className="flex justify-between gap-4">
               <span className="text-slate-400">Selected Period</span>
               <span className="capitalize">
-                {expensesData?.start_date &&
-                expensesData?.end_date &&
-                selectedPeriod === "all"
-                  ? "Custom Range / All"
-                  : selectedPeriod.replace("_", " ")}
+                {selectedPeriod.replace("_", " ")}
+              </span>
+            </div>
+
+            <div className="mt-2 flex justify-between gap-4">
+              <span className="text-slate-400">Selected Category</span>
+              <span className="capitalize">
+                {selectedExpenseCategory.replace("_", " ")}
               </span>
             </div>
 
@@ -719,28 +702,168 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-slate-400">
-              No transactions for this period.
+              No transactions for this filter. Try: I spent $25 on lunch.
             </p>
           )}
         </section>
 
-        {/* Reminder Tasks Section */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl lg:col-span-2">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-blue-400">Tasks</p>
               <h2 className="text-2xl font-bold">Todo & Reminders</h2>
               <p className="mt-2 text-slate-400">
-                Saved tasks are created by the Task Agent and loaded from Supabase.
+                Saved tasks are created by the Task Agent and loaded from
+                Supabase.
               </p>
             </div>
 
             <button
-              onClick={fetchTasks}
+              onClick={() => {
+                fetchTasks(selectedTaskPriority);
+                fetchTaskReminders();
+              }}
               className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
             >
               Refresh
             </button>
+          </div>
+
+          <div className="mb-6 rounded-2xl border border-slate-700 bg-slate-800 p-4">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-blue-400">
+                  Reminder Center
+                </p>
+                <h3 className="text-xl font-bold">Today&apos;s Attention</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Tasks that are due, upcoming, overdue, or need follow-up.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchTaskReminders}
+                className="rounded-lg border border-slate-600 px-3 py-2 text-sm hover:bg-slate-700"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {remindersLoading ? (
+              <p className="text-sm text-slate-400">Loading reminders...</p>
+            ) : taskReminders ? (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-blue-500/30 bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Due Today</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {taskReminders.due_today_count}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-purple-500/30 bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Upcoming</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {taskReminders.upcoming_count}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-red-500/30 bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Overdue</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {taskReminders.overdue_count}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-yellow-500/30 bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Follow-up</p>
+                  <p className="mt-1 text-2xl font-bold">
+                    {taskReminders.follow_up_count}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">
+                No reminder data available yet.
+              </p>
+            )}
+          </div>
+
+          {taskReminders && (
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+                <h4 className="mb-3 font-semibold">Due Today</h4>
+
+                {taskReminders.due_today.length > 0 ? (
+                  <div className="space-y-2">
+                    {taskReminders.due_today.slice(0, 3).map((task) => (
+                      <div key={task.id} className="rounded-lg bg-slate-900 p-3">
+                        <p className="font-medium">{task.title}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          Due:{" "}
+                          {task.due_date
+                            ? new Date(task.due_date).toLocaleString()
+                            : "N/A"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">No tasks due today.</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+                <h4 className="mb-3 font-semibold">Overdue / Follow-up</h4>
+
+                {taskReminders.overdue.length > 0 ||
+                taskReminders.follow_up.length > 0 ? (
+                  <div className="space-y-2">
+                    {[...taskReminders.overdue, ...taskReminders.follow_up]
+                      .slice(0, 3)
+                      .map((task) => (
+                        <div
+                          key={task.id}
+                          className="rounded-lg bg-slate-900 p-3"
+                        >
+                          <p className="font-medium">{task.title}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Due:{" "}
+                            {task.due_date
+                              ? new Date(task.due_date).toLocaleString()
+                              : "N/A"}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">
+                    No overdue follow-ups.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="mb-6">
+            <label className="mb-2 block text-sm text-slate-400">
+              Filter by Priority
+            </label>
+
+            <select
+              value={selectedTaskPriority}
+              onChange={(event) =>
+                handleTaskPriorityChange(
+                  event.target.value as TaskPriorityFilter
+                )
+              }
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+            >
+              {taskPriorityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -751,12 +874,16 @@ export default function Home() {
 
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Pending</p>
-              <p className="mt-1 text-xl font-bold">{tasksData?.pending_count ?? 0}</p>
+              <p className="mt-1 text-xl font-bold">
+                {tasksData?.pending_count ?? 0}
+              </p>
             </div>
 
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
               <p className="text-sm text-slate-400">Completed</p>
-              <p className="mt-1 text-xl font-bold">{tasksData?.completed_count ?? 0}</p>
+              <p className="mt-1 text-xl font-bold">
+                {tasksData?.completed_count ?? 0}
+              </p>
             </div>
           </div>
 
@@ -764,7 +891,7 @@ export default function Home() {
             <p className="text-slate-400">Loading tasks...</p>
           ) : tasksData && tasksData.tasks.length > 0 ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {tasksData.tasks.slice(0, 10).map((task) => (
+              {tasksData.tasks.slice(0, 10).map((task: TaskItem) => (
                 <div
                   key={task.id}
                   className="rounded-xl border border-slate-700 bg-slate-800 p-4"
@@ -787,7 +914,9 @@ export default function Home() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-400">{task.description}</p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {task.description}
+                      </p>
 
                       {task.due_date && (
                         <p className="mt-2 text-xs text-slate-500">
@@ -819,12 +948,10 @@ export default function Home() {
             </div>
           ) : (
             <p className="text-slate-400">
-              No tasks yet. Try: Remind me to pay rent tomorrow.
+              No tasks for this filter. Try: Remind me to pay rent tomorrow.
             </p>
           )}
         </section>
-
-
       </div>
     </main>
   );

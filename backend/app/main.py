@@ -151,6 +151,8 @@ def get_expenses(
     period: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    category: Optional[str] = None,
+
 ):
     period_start, period_end = get_date_range_for_period(period)
 
@@ -161,6 +163,7 @@ def get_expenses(
         user_id=user_id,
         start_date=final_start_date,
         end_date=final_end_date,
+        category=category,
     )
 
     total_debit = sum(
@@ -228,8 +231,14 @@ def update_expense(expense_id: str, request: UpdateExpenseRequest):
 
 # Reminder Task Endpoints or API for Task Agent
 @app.get("/api/tasks/{user_id}", response_model=TasksResponse)
-def get_tasks(user_id: str):
-    tasks = get_tasks_by_user(user_id)
+def get_tasks(
+    user_id: str,
+    priority: Optional[str] = None,
+):
+    tasks = get_tasks_by_user(
+        user_id=user_id,
+        priority=priority,
+    )
 
     pending_count = sum(1 for task in tasks if task["status"] == "pending")
     completed_count = sum(1 for task in tasks if task["status"] == "completed")

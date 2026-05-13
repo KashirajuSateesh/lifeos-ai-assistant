@@ -39,10 +39,11 @@ def get_expenses_by_user(
     user_id: str,
     start_date: str | None = None,
     end_date: str | None = None,
+    category: str | None = None,
 ) -> list[Dict[str, Any]]:
     """
     Fetches expenses for a specific user.
-    If start_date and end_date are provided, it filters by created_at date range.
+    Supports optional date range and category filtering.
     Latest expenses appear first.
     """
 
@@ -59,6 +60,9 @@ def get_expenses_by_user(
 
     if end_date:
         query = query.lte("created_at", end_date)
+
+    if category and category != "all":
+        query = query.eq("category", category)
 
     result = query.order("created_at", desc=True).execute()
 
@@ -119,21 +123,28 @@ def save_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     return result.data[0]
 
 
-def get_tasks_by_user(user_id: str) -> list[Dict[str, Any]]:
+def get_tasks_by_user(
+    user_id: str,
+    priority: str | None = None,
+) -> list[Dict[str, Any]]:
     """
-    Fetches all tasks for a specific user.
+    Fetches tasks for a specific user.
+    Supports optional priority filtering.
     Latest tasks appear first.
     """
 
     supabase = get_supabase_client()
 
-    result = (
+    query = (
         supabase.table("tasks")
         .select("*")
         .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .execute()
     )
+
+    if priority and priority != "all":
+        query = query.eq("priority", priority)
+
+    result = query.order("created_at", desc=True).execute()
 
     return result.data or []
 
