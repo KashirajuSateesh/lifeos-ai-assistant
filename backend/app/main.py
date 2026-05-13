@@ -11,6 +11,9 @@ from app.agents.places_agent import handle_places_message
 from app.schemas import ChatRequest, ChatResponse, ExpensesResponse
 from app.services.database import get_expenses_by_user
 
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
 app = FastAPI(
     title="LifeOS AI Assistant API",
     description="Backend API for the LifeOS Personal AI Assistant using a multi-agent system.",
@@ -82,9 +85,59 @@ def chat(request: ChatRequest):
         response=agent_result["response"],
     )
 
+
+
+def get_date_range_for_period(period: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """
+    Converts a period like today, this_week, this_month, this_year
+    into start_date and end_date ISO strings.
+    """
+
+    if not period:
+        return None, None
+
+    now = datetime.now(timezone.utc)
+
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now
+        return start.isoformat(), end.isoformat()
+
+    if period == "this_week":
+        start = now - timedelta(days=now.weekday())
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = now
+        return start.isoformat(), end.isoformat()
+
+    if period == "this_month":
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = now
+        return start.isoformat(), end.isoformat()
+
+    if period == "this_year":
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = now
+        return start.isoformat(), end.isoformat()
+
+    return None, None
+
 @app.get("/api/expenses/{user_id}", response_model=ExpensesResponse)
-def get_expenses(user_id: str):
-    expenses = get_expenses_by_user(user_id)
+def get_expenses(
+    user_id: str,
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    period_start, period_end = get_date_range_for_period(period)
+
+    final_start_date = start_date or period_start
+    final_end_date = end_date or period_end
+
+    expenses = get_expenses_by_user(
+        user_id=user_id,
+        start_date=final_start_date,
+        end_date=final_end_date,
+    )
 
     total_debit = sum(
         float(expense["amount"])
@@ -98,11 +151,17 @@ def get_expenses(user_id: str):
         if expense["transaction_type"] == "credit"
     )
 
+    net_balance = total_credit - total_debit
+
     return ExpensesResponse(
         status="success",
         user_id=user_id,
         count=len(expenses),
         total_debit=total_debit,
         total_credit=total_credit,
+        net_balance=net_balance,
+        period=period,
+        start_date=final_start_date,
+        end_date=final_end_date,
         expenses=expenses,
     )

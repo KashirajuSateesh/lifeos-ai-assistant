@@ -33,4 +33,8 @@ class ExpensesResponse(BaseModel):
     count: int
     total_debit: float
     total_credit: float
+    net_balance: float
+    period: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     expenses: List[ExpenseItem]

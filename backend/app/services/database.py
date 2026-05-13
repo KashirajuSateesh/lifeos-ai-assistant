@@ -35,20 +35,31 @@ def save_expense(expense_data: Dict[str, Any]) -> Dict[str, Any]:
 
     return result.data[0]
 
-def get_expenses_by_user(user_id: str) -> list[Dict[str, Any]]:
+def get_expenses_by_user(
+    user_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[Dict[str, Any]]:
     """
-    Fetches all expenses for a specific user.
+    Fetches expenses for a specific user.
+    If start_date and end_date are provided, it filters by created_at date range.
     Latest expenses appear first.
     """
 
     supabase = get_supabase_client()
 
-    result = (
+    query = (
         supabase.table("expenses")
         .select("*")
         .eq("user_id", user_id)
-        .order("created_at", desc=True)
-        .execute()
     )
+
+    if start_date:
+        query = query.gte("created_at", start_date)
+
+    if end_date:
+        query = query.lte("created_at", end_date)
+
+    result = query.order("created_at", desc=True).execute()
 
     return result.data or []
