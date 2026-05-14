@@ -26,6 +26,8 @@ async function getAuthHeaders() {
     data: { session },
   } = await supabase.auth.getSession();
 
+  console.log("Access token exists:", Boolean(session?.access_token));
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -56,7 +58,9 @@ export async function sendChatMessage(message: string): Promise<ChatResponse> {
   });
 
   if (!response.ok) {
-    throw new Error("Backend chat request failed");
+    const errorText = await response.text();
+    console.error("Backend chat error:", response.status, errorText);
+    throw new Error(`Backend chat request failed: ${response.status} ${errorText}`);
   }
 
   return response.json();

@@ -9,7 +9,7 @@ from app.agents.journal_agent import handle_journal_message
 from app.agents.places_agent import handle_places_message
 
 from fastapi import Depends
-from app.services.auth import get_bearer_token
+from app.services.auth import get_bearer_token, get_authenticated_user_id
 
 from app.schemas import (
     ChatRequest,
@@ -89,7 +89,10 @@ def health_check():
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
+def chat(
+    request: ChatRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     routing_result = classify_intent(request.message)
 
     intent = routing_result["intent"]
@@ -100,28 +103,28 @@ def chat(request: ChatRequest):
         agent_result = handle_expense_message(
             request.message,
             extracted_data,
-            user_id=request.user_id,
+            user_id=authenticated_user_id
         )
 
     elif selected_agent == "task_agent":
         agent_result = handle_task_message(
         request.message,
         extracted_data,
-        user_id=request.user_id,
+        user_id=authenticated_user_id
     )
 
     elif selected_agent == "journal_agent":
         agent_result = handle_journal_message(
         request.message,
         extracted_data,
-        user_id=request.user_id,
+        user_id=authenticated_user_id
     )
 
     elif selected_agent == "places_agent":
         agent_result = handle_places_message(
         request.message,
         extracted_data,
-        user_id=request.user_id,
+        user_id=authenticated_user_id
     )
 
     else:
@@ -132,7 +135,7 @@ def chat(request: ChatRequest):
 
     return ChatResponse(
         status="success",
-        user_id=request.user_id,
+        user_id=authenticated_user_id,
         message_received=request.message,
         intent=intent,
         selected_agent=selected_agent,
@@ -514,9 +517,9 @@ def get_place_suggestions(
 
 # login and authentication endpoints
 @app.get("/api/auth/test")
-def auth_test(token: str = Depends(get_bearer_token)):
+def auth_test(user_id: str = Depends(get_authenticated_user_id)):
     return {
         "status": "success",
-        "message": "Authorization token received by backend",
-        "token_preview": token[:20] + "...",
-    } 
+        "message": "Token verified successfully",
+        "user_id": user_id,
+    }

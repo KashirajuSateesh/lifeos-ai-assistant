@@ -8,17 +8,23 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 
-def get_supabase_client() -> Client:
+def get_supabase_client():
     """
-    Creates and returns a Supabase client.
+    Server-side Supabase client.
+
+    Uses service role key when available so backend can safely perform DB operations
+    after verifying the user's auth token.
     """
 
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in .env file")
+    key = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_KEY
 
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    if not SUPABASE_URL or not key:
+        raise RuntimeError("Missing Supabase configuration")
+
+    return create_client(SUPABASE_URL, key)
 
 
 def save_expense(expense_data: Dict[str, Any]) -> Dict[str, Any]:
