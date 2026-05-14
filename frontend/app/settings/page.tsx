@@ -3,7 +3,7 @@
 import { ChangeEvent, useEffect, useState } from "react";
 
 import AppShell from "@/components/layout/AppShell";
-import { getMyProfile, updateMyProfile } from "@/lib/api";
+import { deleteMyAccount, getMyProfile, updateMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { Profile } from "@/lib/types";
 
@@ -23,6 +23,9 @@ export default function SettingsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   async function loadSettings() {
     setLoading(true);
@@ -168,6 +171,35 @@ export default function SettingsPage() {
     } catch (error) {
       console.error(error);
       alert("Failed to change password.");
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== "DELETE") {
+      alert('Please type "DELETE" to confirm account deletion.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      "This will permanently delete your account and all app data. Are you absolutely sure?"
+    );
+
+    if (!confirmDelete) return;
+
+    setDeletingAccount(true);
+
+    try {
+      await deleteMyAccount();
+
+      await supabase.auth.signOut();
+
+      alert("Your account has been deleted.");
+      window.location.href = "/login";
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete account. Please try again.");
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -345,16 +377,32 @@ export default function SettingsPage() {
             <section className="rounded-2xl border border-red-900/60 bg-red-950/20 p-6 shadow-xl">
               <p className="text-sm font-medium text-red-300">Danger Zone</p>
               <h2 className="mt-1 text-2xl font-bold">Delete Account</h2>
+
               <p className="mt-2 text-sm text-red-200/80">
-                Account deletion will remove your profile and all related app data.
-                We will implement this safely in the next step.
+                This will permanently delete your profile, expenses, tasks, journals,
+                places, and login account. This action cannot be undone.
               </p>
 
+              <div className="mt-5">
+                <label className="mb-2 block text-sm text-red-200">
+                  Type DELETE to confirm
+                </label>
+
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(event) => setDeleteConfirmText(event.target.value)}
+                  placeholder="DELETE"
+                  className="w-full rounded-xl border border-red-900/60 bg-slate-950 px-3 py-3 text-white outline-none focus:border-red-500"
+                />
+              </div>
+
               <button
-                disabled
-                className="mt-4 rounded-xl border border-red-500/40 px-5 py-3 text-sm text-red-300 opacity-60"
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount || deleteConfirmText !== "DELETE"}
+                className="mt-4 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete Account Coming Next
+                {deletingAccount ? "Deleting Account..." : "Delete My Account"}
               </button>
             </section>
           </div>

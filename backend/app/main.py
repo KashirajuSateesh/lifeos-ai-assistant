@@ -35,9 +35,10 @@ from app.schemas import (
     ProfileRequest,
     ProfileResponse,
     UpdateProfileResponse,
+    DeleteAccountResponse,
 )
 
-from app.services.auth import get_authenticated_user_id
+from app.services.auth import get_authenticated_user_id, delete_supabase_auth_user
 
 from app.services.database import (
     delete_expense_by_id,
@@ -60,6 +61,7 @@ from app.services.database import (
     get_profile_by_user,
     upsert_profile,
     update_profile_by_user,
+    delete_all_user_app_data,
 )
 
 app = FastAPI(
@@ -661,4 +663,24 @@ def update_my_profile(
         status="success",
         profile=profile,
         message="Profile updated successfully",
+    )
+
+
+# -------------------------
+# Account Deletion - Authenticated
+# -------------------------
+
+@app.delete("/api/account/me", response_model=DeleteAccountResponse)
+def delete_my_account(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    deleted_data = delete_all_user_app_data(authenticated_user_id)
+
+    delete_supabase_auth_user(authenticated_user_id)
+
+    return DeleteAccountResponse(
+        status="success",
+        user_id=authenticated_user_id,
+        deleted_data=deleted_data,
+        message="Account and all related app data deleted successfully",
     )

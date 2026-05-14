@@ -684,3 +684,35 @@ def update_profile_by_user(
         raise RuntimeError("Failed to update profile")
 
     return result.data[0]
+
+# Account Deletion Code
+
+def delete_all_user_app_data(user_id: str) -> Dict[str, Any]:
+    """
+    Deletes all app data for a user.
+    This does not delete the Supabase Auth user.
+    """
+
+    supabase = get_supabase_client()
+
+    deleted_summary = {}
+
+    tables = [
+        "expenses",
+        "tasks",
+        "journal_entries",
+        "places",
+        "profiles",
+    ]
+
+    for table in tables:
+        result = (
+            supabase.table(table)
+            .delete()
+            .eq("user_id", user_id)
+            .execute()
+        )
+
+        deleted_summary[table] = len(result.data or [])
+
+    return deleted_summary

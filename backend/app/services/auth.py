@@ -4,6 +4,15 @@ from fastapi import Header, HTTPException
 
 from app.services.database import get_supabase_client
 
+import os
+import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
 
 def get_bearer_token(authorization: Optional[str] = Header(default=None)) -> str:
     if not authorization:
@@ -52,4 +61,35 @@ def get_authenticated_user_id(
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication token.",
+        )
+    
+# Account Delete Function
+def delete_supabase_auth_user(user_id: str) -> None:
+    """
+    Deletes a user from Supabase Auth using the service role key.
+    Must only be called from backend after verifying the logged-in user.
+    """
+
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Missing Supabase service role configuration",
+        )
+
+    url = f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}"
+
+    headers = {
+        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+    }
+
+    response = httpx.delete(url, headers=headers, timeout=15.0)
+
+    if response.status_code not in [200, 204]:
+        print("DELETE AUTH USER ERROR:")
+        print(response.status_code, response.text)
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to delete Supabase Auth user",
         )

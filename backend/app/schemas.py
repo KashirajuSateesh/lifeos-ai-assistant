@@ -258,3 +258,11 @@ class UpdateProfileResponse(BaseModel):
     status: str
     profile: Dict[str, Any]
     message: str
+
+# Account Delete Schemas
+
+class DeleteAccountResponse(BaseModel):
+    status: str
+    user_id: str
+    deleted_data: Dict[str, Any]
+    message: str

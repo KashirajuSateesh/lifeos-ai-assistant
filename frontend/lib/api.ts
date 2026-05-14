@@ -444,3 +444,19 @@ export async function updateMyProfile(
 
   return response.json();
 }
+
+// Account deletion helper API function
+export async function deleteMyAccount() {
+  const response = await fetch(`${getBackendUrl()}/api/account/me`, {
+    method: "DELETE",
+    headers: await getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Delete account error:", response.status, errorText);
+    throw new Error("Failed to delete account");
+  }
+
+  return response.json();
+}
