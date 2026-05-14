@@ -2,6 +2,7 @@ from datetime import date
 from typing import Dict, Any
 
 from app.services.database import save_journal_entry
+from app.services.llm import extract_journal_with_llm
 
 
 def detect_mood(message: str) -> str:
@@ -96,11 +97,10 @@ def handle_journal_message(
     """
     Journal Agent.
 
-    Responsibility:
-    - Save long journal entries
-    - Detect mood
-    - Detect tags
-    - Create short summary
+    Uses LLM extraction for:
+    - mood
+    - tags
+    - summary
     """
 
     entry_text = message.strip()
@@ -113,22 +113,39 @@ def handle_journal_message(
             },
         }
 
-    mood = detect_mood(entry_text)
-    tags = detect_tags(entry_text)
-    summary = create_summary(entry_text)
+    try:
+        llm_journal = extract_journal_with_llm(entry_text)
+
+        print("LLM JOURNAL EXTRACTION RESULT:")
+        print(llm_journal)
+
+    except Exception as error:
+        print("LLM JOURNAL EXTRACTION ERROR:")
+        print(error)
+
+        mood = detect_mood(entry_text)
+        tags = detect_tags(entry_text)
+        summary = create_summary(entry_text)
+
+        llm_journal = {
+            "mood": mood,
+            "tags": tags,
+            "summary": summary,
+            "confidence": 0.0,
+        }
 
     journal_record = {
         "user_id": user_id,
         "entry_text": entry_text,
-        "mood": mood,
-        "tags": tags,
-        "summary": summary,
+        "mood": llm_journal["mood"],
+        "tags": llm_journal["tags"],
+        "summary": llm_journal["summary"],
         "entry_date": date.today().isoformat(),
     }
 
     saved_journal = save_journal_entry(journal_record)
 
     return {
-        "response": f"Journal Agent: Saved your journal entry with {mood} mood.",
+        "response": f"Journal Agent: Saved your journal entry with {llm_journal['mood']} mood.",
         "extracted_data": saved_journal,
     }

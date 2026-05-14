@@ -364,3 +364,102 @@ def validate_task_extraction(data: Dict[str, Any]) -> Dict[str, Any]:
         "status": "pending",
         "confidence": confidence,
     }
+
+
+# LLM Journal Extractor
+def extract_journal_with_llm(message: str) -> Dict[str, Any]:
+    """
+    Uses OpenAI to extract journal mood, tags, and summary.
+    """
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is missing")
+
+    system_prompt = """
+You are a Journal Analysis Agent.
+
+Analyze the user's journal entry and return structured JSON.
+
+Return only valid JSON. Do not include markdown.
+
+Fields:
+{
+  "mood": "positive | negative | neutral | mixed",
+  "tags": ["short_tag_1", "short_tag_2"],
+  "summary": "1 sentence summary of the journal entry",
+  "confidence": 0.0
+}
+
+Rules:
+- Use "mixed" when the user expresses both positive and negative emotions.
+- Tags should be lowercase and concise, like: work, project, family, health, stress, productivity, learning, career, finance, relationship, personal_growth.
+- Summary should be short, clear, and human-readable.
+- Do not include more than 5 tags.
+"""
+
+    user_prompt = f"""
+Analyze this journal entry:
+
+{message}
+"""
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system_prompt.strip()},
+            {"role": "user", "content": user_prompt.strip()},
+        ],
+    )
+
+    content = response.choices[0].message.content
+
+    if not content:
+        raise RuntimeError("OpenAI returned empty journal extraction response")
+
+    parsed = json.loads(content)
+
+    return validate_journal_extraction(parsed)
+
+
+def validate_journal_extraction(data: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_moods = {"positive", "negative", "neutral", "mixed"}
+
+    mood = data.get("mood", "neutral")
+
+    if mood not in allowed_moods:
+        mood = "neutral"
+
+    tags = data.get("tags") or []
+
+    if not isinstance(tags, list):
+        tags = ["general"]
+
+    cleaned_tags = []
+
+    for tag in tags:
+        if isinstance(tag, str):
+            cleaned = tag.strip().lower().replace(" ", "_")
+            if cleaned:
+                cleaned_tags.append(cleaned)
+
+    cleaned_tags = cleaned_tags[:5] or ["general"]
+
+    summary = data.get("summary") or "Journal entry saved."
+
+    confidence = data.get("confidence", 0.0)
+
+    try:
+        confidence = float(confidence)
+    except Exception:
+        confidence = 0.0
+
+    confidence = max(0.0, min(1.0, confidence))
+
+    return {
+        "mood": mood,
+        "tags": cleaned_tags,
+        "summary": summary,
+        "confidence": confidence,
+    }
