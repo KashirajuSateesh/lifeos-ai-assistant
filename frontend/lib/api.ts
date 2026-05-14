@@ -93,10 +93,15 @@ export async function getExpenses(params?: {
   const queryString = queryParams.toString();
 
   const response = await fetch(
-    `${getBackendUrl()}/api/expenses/${DEMO_USER_ID}${queryString ? `?${queryString}` : ""}`
+    `${getBackendUrl()}/api/expenses/me${queryString ? `?${queryString}` : ""}`,
+    {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Get expenses error:", response.status, errorText);
     throw new Error("Failed to fetch expenses");
   }
 
@@ -106,6 +111,7 @@ export async function getExpenses(params?: {
 export async function deleteExpense(expenseId: string) {
   const response = await fetch(`${getBackendUrl()}/api/expenses/${expenseId}`, {
     method: "DELETE",
+    headers: await getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -128,6 +134,7 @@ export async function updateExpense(
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...await getAuthHeaders(),
     },
     body: JSON.stringify(data),
   });
@@ -139,7 +146,9 @@ export async function updateExpense(
   return response.json();
 }
 
-export async function getTasks(priority: TaskPriorityFilter = "all"): Promise<TasksResponse> {
+export async function getTasks(
+  priority: TaskPriorityFilter = "all"
+): Promise<TasksResponse> {
   const queryParams = new URLSearchParams();
 
   if (priority !== "all") {
@@ -149,10 +158,15 @@ export async function getTasks(priority: TaskPriorityFilter = "all"): Promise<Ta
   const queryString = queryParams.toString();
 
   const response = await fetch(
-    `${getBackendUrl()}/api/tasks/${DEMO_USER_ID}${queryString ? `?${queryString}` : ""}`
+    `${getBackendUrl()}/api/tasks/me${queryString ? `?${queryString}` : ""}`,
+    {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Get tasks error:", response.status, errorText);
     throw new Error("Failed to fetch tasks");
   }
 
@@ -160,9 +174,13 @@ export async function getTasks(priority: TaskPriorityFilter = "all"): Promise<Ta
 }
 
 export async function getTaskReminders(): Promise<TaskRemindersResponse> {
-  const response = await fetch(`${getBackendUrl()}/api/tasks/reminders/${DEMO_USER_ID}`);
+  const response = await fetch(`${getBackendUrl()}/api/tasks/reminders/me`, {
+    headers: await getAuthHeaders(),
+  });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Get task reminders error:", response.status, errorText);
     throw new Error("Failed to fetch task reminders");
   }
 
@@ -174,6 +192,7 @@ export async function updateTask(taskId: string, data: Record<string, unknown>) 
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...await getAuthHeaders(),
     },
     body: JSON.stringify(data),
   });
@@ -188,6 +207,7 @@ export async function updateTask(taskId: string, data: Record<string, unknown>) 
 export async function deleteTask(taskId: string) {
   const response = await fetch(`${getBackendUrl()}/api/tasks/${taskId}`, {
     method: "DELETE",
+    headers: await getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -201,7 +221,9 @@ export async function deleteTask(taskId: string) {
 
 export async function getRecentJournals(): Promise<RecentJournalsResponse> {
   const response = await fetch(
-    `${getBackendUrl()}/api/journals/recent/${DEMO_USER_ID}`
+    `${getBackendUrl()}/api/journals/recent/me`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -216,7 +238,9 @@ export async function getMonthlyJournals(
   month: number
 ): Promise<MonthlyJournalsResponse> {
   const response = await fetch(
-    `${getBackendUrl()}/api/journals/${DEMO_USER_ID}?year=${year}&month=${month}`
+    `${getBackendUrl()}/api/journals/me?year=${year}&month=${month}`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -229,6 +253,7 @@ export async function getMonthlyJournals(
 export async function deleteJournal(journalId: string) {
   const response = await fetch(`${getBackendUrl()}/api/journals/${journalId}`, {
     method: "DELETE",
+    headers: await getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -257,9 +282,11 @@ export async function getPlaces(params?: {
   const queryString = queryParams.toString();
 
   const response = await fetch(
-    `${getBackendUrl()}/api/places/${DEMO_USER_ID}${
+    `${getBackendUrl()}/api/places/me${
       queryString ? `?${queryString}` : ""
-    }`
+    }`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -274,6 +301,7 @@ export async function updatePlace(placeId: string, data: Record<string, unknown>
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...await getAuthHeaders(),
     },
     body: JSON.stringify(data),
   });
@@ -288,6 +316,7 @@ export async function updatePlace(placeId: string, data: Record<string, unknown>
 export async function deletePlace(placeId: string) {
   const response = await fetch(`${getBackendUrl()}/api/places/${placeId}`, {
     method: "DELETE",
+    headers: await getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -309,7 +338,9 @@ export async function getNearbyPlaces(params: {
   queryParams.set("radius_km", String(params.radiusKm ?? 10));
 
   const response = await fetch(
-    `${getBackendUrl()}/api/places/nearby/${DEMO_USER_ID}?${queryParams.toString()}`
+    `${getBackendUrl()}/api/places/nearby/me?${queryParams.toString()}`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -329,7 +360,9 @@ export async function getPlacesWithDistances(params: {
   queryParams.set("longitude", String(params.longitude));
 
   const response = await fetch(
-    `${getBackendUrl()}/api/places/distances/${DEMO_USER_ID}?${queryParams.toString()}`
+    `${getBackendUrl()}/api/places/distances/me?${queryParams.toString()}`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {
@@ -346,7 +379,9 @@ export async function getPlaceSuggestions(
   queryParams.set("older_than_days", String(olderThanDays));
 
   const response = await fetch(
-    `${getBackendUrl()}/api/places/suggestions/${DEMO_USER_ID}?${queryParams.toString()}`
+    `${getBackendUrl()}/api/places/suggestions/me?${queryParams.toString()}`, {
+      headers: await getAuthHeaders(),
+    }
   );
 
   if (!response.ok) {

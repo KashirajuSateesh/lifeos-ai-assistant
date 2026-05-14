@@ -1,92 +1,148 @@
-from fastapi import FastAPI
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.schemas import ChatRequest, ChatResponse
-from app.agents.orchestrator import classify_intent
 from app.agents.expense_agent import handle_expense_message
-from app.agents.task_agent import handle_task_message
 from app.agents.journal_agent import handle_journal_message
+from app.agents.orchestrator import classify_intent
 from app.agents.places_agent import handle_places_message
-
-from fastapi import Depends
-from app.services.auth import get_bearer_token, get_authenticated_user_id
+from app.agents.task_agent import handle_task_message
 
 from app.schemas import (
     ChatRequest,
     ChatResponse,
-    ExpensesResponse,
     DeleteExpenseResponse,
+    DeleteJournalResponse,
+    DeletePlaceResponse,
+    DeleteTaskResponse,
+    ExpensesResponse,
+    MonthlyJournalsResponse,
+    NearbyPlacesResponse,
+    PlaceSuggestionsResponse,
+    PlacesResponse,
+    PlacesWithDistancesResponse,
+    RecentJournalsResponse,
+    TaskRemindersResponse,
+    TasksResponse,
     UpdateExpenseRequest,
     UpdateExpenseResponse,
-    TasksResponse,
-    UpdateTaskRequest,
-    UpdateTaskResponse,
-    DeleteTaskResponse,
-    TaskRemindersResponse,
-    RecentJournalsResponse,
-    MonthlyJournalsResponse,
-    DeleteJournalResponse,
-    PlacesResponse,
     UpdatePlaceRequest,
     UpdatePlaceResponse,
-    DeletePlaceResponse,
-    NearbyPlacesResponse,
-    PlacesWithDistancesResponse,
-    PlaceSuggestionsResponse,
-)
-from app.services.database import (
-    get_expenses_by_user,
-    delete_expense_by_id,
-    update_expense_by_id,
-    get_tasks_by_user,
-    update_task_by_id,
-    delete_task_by_id,
-    get_task_reminders_by_user,
-    get_recent_journals_by_user,
-    get_journals_by_month,
-    delete_journal_by_id,
-    get_places_by_user,
-    update_place_by_id,
-    delete_place_by_id,
-    get_nearby_places_by_user,
-    get_places_with_distances_by_user,
-    get_place_suggestions_by_user,
-    update_place_last_suggested,
+    UpdateTaskRequest,
+    UpdateTaskResponse,
 )
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from app.services.auth import get_authenticated_user_id
+
+from app.services.database import (
+    delete_expense_by_id,
+    delete_journal_by_id,
+    delete_place_by_id,
+    delete_task_by_id,
+    get_expenses_by_user,
+    get_journals_by_month,
+    get_nearby_places_by_user,
+    get_place_suggestions_by_user,
+    get_places_by_user,
+    get_places_with_distances_by_user,
+    get_recent_journals_by_user,
+    get_task_reminders_by_user,
+    get_tasks_by_user,
+    update_expense_by_id,
+    update_place_by_id,
+    update_place_last_suggested,
+    update_task_by_id,
+)
 
 app = FastAPI(
     title="LifeOS AI Assistant API",
-    description="Backend API for the LifeOS Personal AI Assistant using a multi-agent system.",
-    version="0.1.0",
+    description="Personal AI assistant backend using multi-agent system",
+    version="1.0.0",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # We will restrict this later for production
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# -------------------------
+# Health / Root
+# -------------------------
+
 @app.get("/")
 def root():
     return {
-        "message": "LifeOS AI Assistant backend is running",
         "status": "success",
+        "message": "LifeOS AI Assistant backend is running",
     }
 
 
 @app.get("/health")
 def health_check():
     return {
-        "status": "healthy",
-        "service": "lifeos-backend",
+        "status": "ok",
     }
 
+
+@app.get("/api/auth/test")
+def auth_test(user_id: str = Depends(get_authenticated_user_id)):
+    return {
+        "status": "success",
+        "message": "Token verified successfully",
+        "user_id": user_id,
+    }
+
+
+# -------------------------
+# Helper: Expense date filters
+# -------------------------
+
+def get_period_date_range(period: Optional[str]):
+    now = datetime.now(timezone.utc)
+
+    if period == "today":
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_date.isoformat(), end_date.isoformat()
+
+    if period == "this_week":
+        start_date = now - timedelta(days=now.weekday())
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_date.isoformat(), end_date.isoformat()
+
+    if period == "this_month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_date.isoformat(), end_date.isoformat()
+
+    if period == "this_year":
+        start_date = now.replace(
+            month=1,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return start_date.isoformat(), end_date.isoformat()
+
+    return None, None
+
+
+# -------------------------
+# Chat / Orchestrator
+# -------------------------
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(
@@ -95,7 +151,6 @@ def chat(
 ):
     routing_result = classify_intent(request.message)
 
-    intent = routing_result["intent"]
     selected_agent = routing_result["selected_agent"]
     extracted_data = routing_result.get("extracted_data", {})
 
@@ -103,33 +158,33 @@ def chat(
         agent_result = handle_expense_message(
             request.message,
             extracted_data,
-            user_id=authenticated_user_id
+            user_id=authenticated_user_id,
         )
 
     elif selected_agent == "task_agent":
         agent_result = handle_task_message(
-        request.message,
-        extracted_data,
-        user_id=authenticated_user_id
-    )
+            request.message,
+            extracted_data,
+            user_id=authenticated_user_id,
+        )
 
     elif selected_agent == "journal_agent":
         agent_result = handle_journal_message(
-        request.message,
-        extracted_data,
-        user_id=authenticated_user_id
-    )
+            request.message,
+            extracted_data,
+            user_id=authenticated_user_id,
+        )
 
     elif selected_agent == "places_agent":
         agent_result = handle_places_message(
-        request.message,
-        extracted_data,
-        user_id=authenticated_user_id
-    )
+            request.message,
+            extracted_data,
+            user_id=authenticated_user_id,
+        )
 
     else:
         agent_result = {
-            "response": "Orchestrator: I received your message. Soon I will handle general conversation too.",
+            "response": "I understood your message, but I could not route it to a specific agent yet.",
             "extracted_data": extracted_data,
         }
 
@@ -137,64 +192,32 @@ def chat(
         status="success",
         user_id=authenticated_user_id,
         message_received=request.message,
-        intent=intent,
+        intent=routing_result["intent"],
         selected_agent=selected_agent,
-        extracted_data=agent_result.get("extracted_data", {}),
+        extracted_data=agent_result.get("extracted_data"),
         response=agent_result["response"],
     )
 
 
+# -------------------------
+# Expenses - Authenticated
+# -------------------------
 
-def get_date_range_for_period(period: Optional[str]) -> tuple[Optional[str], Optional[str]]:
-    """
-    Converts a period like today, this_week, this_month, this_year
-    into start_date and end_date ISO strings.
-    """
-
-    if not period:
-        return None, None
-
-    now = datetime.now(timezone.utc)
-
-    if period == "today":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-        return start.isoformat(), end.isoformat()
-
-    if period == "this_week":
-        start = now - timedelta(days=now.weekday())
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-        return start.isoformat(), end.isoformat()
-
-    if period == "this_month":
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-        return start.isoformat(), end.isoformat()
-
-    if period == "this_year":
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-        return start.isoformat(), end.isoformat()
-
-    return None, None
-
-@app.get("/api/expenses/{user_id}", response_model=ExpensesResponse)
-def get_expenses(
-    user_id: str,
+@app.get("/api/expenses/me", response_model=ExpensesResponse)
+def get_my_expenses(
     period: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     category: Optional[str] = None,
-
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
-    period_start, period_end = get_date_range_for_period(period)
+    period_start_date, period_end_date = get_period_date_range(period)
 
-    final_start_date = start_date or period_start
-    final_end_date = end_date or period_end
+    final_start_date = start_date or period_start_date
+    final_end_date = end_date or period_end_date
 
     expenses = get_expenses_by_user(
-        user_id=user_id,
+        user_id=authenticated_user_id,
         start_date=final_start_date,
         end_date=final_end_date,
         category=category,
@@ -212,33 +235,26 @@ def get_expenses(
         if expense["transaction_type"] == "credit"
     )
 
-    net_balance = total_credit - total_debit
-
     return ExpensesResponse(
         status="success",
-        user_id=user_id,
+        user_id=authenticated_user_id,
         count=len(expenses),
         total_debit=total_debit,
         total_credit=total_credit,
-        net_balance=net_balance,
+        net_balance=total_credit - total_debit,
         period=period,
         start_date=final_start_date,
         end_date=final_end_date,
         expenses=expenses,
     )
 
-@app.delete("/api/expenses/{expense_id}", response_model=DeleteExpenseResponse)
-def delete_expense(expense_id: str):
-    deleted_expense = delete_expense_by_id(expense_id)
-
-    return DeleteExpenseResponse(
-        status="success",
-        deleted_expense=deleted_expense,
-        message="Expense deleted successfully",
-    )
 
 @app.patch("/api/expenses/{expense_id}", response_model=UpdateExpenseResponse)
-def update_expense(expense_id: str, request: UpdateExpenseRequest):
+def update_expense(
+    expense_id: str,
+    request: UpdateExpenseRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     update_data = request.model_dump(exclude_none=True)
 
     if "transaction_type" in update_data:
@@ -263,14 +279,31 @@ def update_expense(expense_id: str, request: UpdateExpenseRequest):
     )
 
 
-# Reminder Task Endpoints or API for Task Agent
-@app.get("/api/tasks/{user_id}", response_model=TasksResponse)
-def get_tasks(
-    user_id: str,
+@app.delete("/api/expenses/{expense_id}", response_model=DeleteExpenseResponse)
+def delete_expense(
+    expense_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    deleted_expense = delete_expense_by_id(expense_id)
+
+    return DeleteExpenseResponse(
+        status="success",
+        deleted_expense=deleted_expense,
+        message="Expense deleted successfully",
+    )
+
+
+# -------------------------
+# Tasks - Authenticated
+# -------------------------
+
+@app.get("/api/tasks/me", response_model=TasksResponse)
+def get_my_tasks(
     priority: Optional[str] = None,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
     tasks = get_tasks_by_user(
-        user_id=user_id,
+        user_id=authenticated_user_id,
         priority=priority,
     )
 
@@ -279,7 +312,7 @@ def get_tasks(
 
     return TasksResponse(
         status="success",
-        user_id=user_id,
+        user_id=authenticated_user_id,
         count=len(tasks),
         pending_count=pending_count,
         completed_count=completed_count,
@@ -287,12 +320,33 @@ def get_tasks(
     )
 
 
-@app.patch("/api/tasks/{task_id}", response_model=UpdateTaskResponse)
-def update_task(task_id: str, request: UpdateTaskRequest):
-    update_data = request.model_dump(exclude_none=True)
+@app.get("/api/tasks/reminders/me", response_model=TaskRemindersResponse)
+def get_my_task_reminders(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    reminders = get_task_reminders_by_user(authenticated_user_id)
 
-    if update_data.get("status") == "completed":
-        update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
+    return TaskRemindersResponse(
+        status="success",
+        user_id=authenticated_user_id,
+        due_today_count=len(reminders["due_today"]),
+        upcoming_count=len(reminders["upcoming"]),
+        overdue_count=len(reminders["overdue"]),
+        follow_up_count=len(reminders["follow_up"]),
+        due_today=reminders["due_today"],
+        upcoming=reminders["upcoming"],
+        overdue=reminders["overdue"],
+        follow_up=reminders["follow_up"],
+    )
+
+
+@app.patch("/api/tasks/{task_id}", response_model=UpdateTaskResponse)
+def update_task(
+    task_id: str,
+    request: UpdateTaskRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    update_data = request.model_dump(exclude_none=True)
 
     if "status" in update_data:
         if update_data["status"] not in ["pending", "completed"]:
@@ -300,6 +354,9 @@ def update_task(task_id: str, request: UpdateTaskRequest):
                 status_code=400,
                 detail="status must be either pending or completed",
             )
+
+        if update_data["status"] == "completed":
+            update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
 
     if "priority" in update_data:
         if update_data["priority"] not in ["low", "medium", "high"]:
@@ -324,7 +381,10 @@ def update_task(task_id: str, request: UpdateTaskRequest):
 
 
 @app.delete("/api/tasks/{task_id}", response_model=DeleteTaskResponse)
-def delete_task(task_id: str):
+def delete_task(
+    task_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     deleted_task = delete_task_by_id(task_id)
 
     return DeleteTaskResponse(
@@ -333,46 +393,43 @@ def delete_task(task_id: str):
         message="Task deleted successfully",
     )
 
-@app.get("/api/tasks/reminders/{user_id}", response_model=TaskRemindersResponse)
-def get_task_reminders(user_id: str):
-    reminders = get_task_reminders_by_user(user_id)
 
-    return TaskRemindersResponse(
-        status="success",
-        user_id=user_id,
-        due_today_count=len(reminders["due_today"]),
-        upcoming_count=len(reminders["upcoming"]),
-        overdue_count=len(reminders["overdue"]),
-        follow_up_count=len(reminders["follow_up"]),
-        due_today=reminders["due_today"],
-        upcoming=reminders["upcoming"],
-        overdue=reminders["overdue"],
-        follow_up=reminders["follow_up"],
+# -------------------------
+# Journals - Authenticated
+# -------------------------
+
+@app.get("/api/journals/recent/me", response_model=RecentJournalsResponse)
+def get_my_recent_journals(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    journals = get_recent_journals_by_user(
+        user_id=authenticated_user_id,
+        limit=5,
     )
-
-@app.get("/api/journals/recent/{user_id}", response_model=RecentJournalsResponse)
-def get_recent_journals(user_id: str):
-    journals = get_recent_journals_by_user(user_id, limit=5)
 
     return RecentJournalsResponse(
         status="success",
-        user_id=user_id,
+        user_id=authenticated_user_id,
         count=len(journals),
         journals=journals,
     )
 
 
-@app.get("/api/journals/{user_id}", response_model=MonthlyJournalsResponse)
-def get_monthly_journals(user_id: str, year: int, month: int):
+@app.get("/api/journals/me", response_model=MonthlyJournalsResponse)
+def get_my_monthly_journals(
+    year: int,
+    month: int,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     journals = get_journals_by_month(
-        user_id=user_id,
+        user_id=authenticated_user_id,
         year=year,
         month=month,
     )
 
     return MonthlyJournalsResponse(
         status="success",
-        user_id=user_id,
+        user_id=authenticated_user_id,
         year=year,
         month=month,
         count=len(journals),
@@ -381,7 +438,10 @@ def get_monthly_journals(user_id: str, year: int, month: int):
 
 
 @app.delete("/api/journals/{journal_id}", response_model=DeleteJournalResponse)
-def delete_journal(journal_id: str):
+def delete_journal(
+    journal_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     deleted_journal = delete_journal_by_id(journal_id)
 
     return DeleteJournalResponse(
@@ -390,30 +450,105 @@ def delete_journal(journal_id: str):
         message="Journal entry deleted successfully",
     )
 
-# Places Agent Endpoints
 
-@app.get("/api/places/{user_id}", response_model=PlacesResponse)
-def get_places(
-    user_id: str,
+# -------------------------
+# Places - Authenticated
+# -------------------------
+
+@app.get("/api/places/me", response_model=PlacesResponse)
+def get_my_places(
     status: Optional[str] = None,
     category: Optional[str] = None,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
     places = get_places_by_user(
-        user_id=user_id,
+        user_id=authenticated_user_id,
         status=status,
         category=category,
     )
 
     return PlacesResponse(
         status="success",
-        user_id=user_id,
+        user_id=authenticated_user_id,
         count=len(places),
         places=places,
     )
 
 
+@app.get("/api/places/nearby/me", response_model=NearbyPlacesResponse)
+def get_my_nearby_places(
+    latitude: float,
+    longitude: float,
+    radius_km: float = 10,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    nearby_places = get_nearby_places_by_user(
+        user_id=authenticated_user_id,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+
+    return NearbyPlacesResponse(
+        status="success",
+        user_id=authenticated_user_id,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        count=len(nearby_places),
+        places=nearby_places,
+    )
+
+
+@app.get("/api/places/distances/me", response_model=PlacesWithDistancesResponse)
+def get_my_places_with_distances(
+    latitude: float,
+    longitude: float,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    places = get_places_with_distances_by_user(
+        user_id=authenticated_user_id,
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+    return PlacesWithDistancesResponse(
+        status="success",
+        user_id=authenticated_user_id,
+        latitude=latitude,
+        longitude=longitude,
+        count=len(places),
+        places=places,
+    )
+
+
+@app.get("/api/places/suggestions/me", response_model=PlaceSuggestionsResponse)
+def get_my_place_suggestions(
+    older_than_days: int = 7,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    suggestions = get_place_suggestions_by_user(
+        user_id=authenticated_user_id,
+        older_than_days=older_than_days,
+    )
+
+    for place in suggestions:
+        update_place_last_suggested(place["id"])
+
+    return PlaceSuggestionsResponse(
+        status="success",
+        user_id=authenticated_user_id,
+        count=len(suggestions),
+        places=suggestions,
+    )
+
+
 @app.patch("/api/places/{place_id}", response_model=UpdatePlaceResponse)
-def update_place(place_id: str, request: UpdatePlaceRequest):
+def update_place(
+    place_id: str,
+    request: UpdatePlaceRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     update_data = request.model_dump(exclude_none=True)
 
     if "status" in update_data:
@@ -439,7 +574,10 @@ def update_place(place_id: str, request: UpdatePlaceRequest):
 
 
 @app.delete("/api/places/{place_id}", response_model=DeletePlaceResponse)
-def delete_place(place_id: str):
+def delete_place(
+    place_id: str,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
     deleted_place = delete_place_by_id(place_id)
 
     return DeletePlaceResponse(
@@ -447,79 +585,3 @@ def delete_place(place_id: str):
         deleted_place=deleted_place,
         message="Place deleted successfully",
     )
-
-# Distance-based place suggestions endpoint
-
-@app.get("/api/places/nearby/{user_id}", response_model=NearbyPlacesResponse)
-def get_nearby_places(
-    user_id: str,
-    latitude: float,
-    longitude: float,
-    radius_km: float = 10,
-):
-    nearby_places = get_nearby_places_by_user(
-        user_id=user_id,
-        latitude=latitude,
-        longitude=longitude,
-        radius_km=radius_km,
-    )
-
-    return NearbyPlacesResponse(
-        status="success",
-        user_id=user_id,
-        latitude=latitude,
-        longitude=longitude,
-        radius_km=radius_km,
-        count=len(nearby_places),
-        places=nearby_places,
-    )
-
-@app.get("/api/places/distances/{user_id}", response_model=PlacesWithDistancesResponse)
-def get_places_with_distances(
-    user_id: str,
-    latitude: float,
-    longitude: float,
-):
-    places = get_places_with_distances_by_user(
-        user_id=user_id,
-        latitude=latitude,
-        longitude=longitude,
-    )
-
-    return PlacesWithDistancesResponse(
-        status="success",
-        user_id=user_id,
-        latitude=latitude,
-        longitude=longitude,
-        count=len(places),
-        places=places,
-    )
-
-@app.get("/api/places/suggestions/{user_id}", response_model=PlaceSuggestionsResponse)
-def get_place_suggestions(
-    user_id: str,
-    older_than_days: int = 7,
-):
-    suggestions = get_place_suggestions_by_user(
-        user_id=user_id,
-        older_than_days=older_than_days,
-    )
-
-    for place in suggestions:
-        update_place_last_suggested(place["id"])
-
-    return PlaceSuggestionsResponse(
-        status="success",
-        user_id=user_id,
-        count=len(suggestions),
-        places=suggestions,
-    )
-
-# login and authentication endpoints
-@app.get("/api/auth/test")
-def auth_test(user_id: str = Depends(get_authenticated_user_id)):
-    return {
-        "status": "success",
-        "message": "Token verified successfully",
-        "user_id": user_id,
-    }
