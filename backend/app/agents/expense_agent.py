@@ -2,6 +2,7 @@ import re
 from typing import Dict, Any, Optional
 
 from app.services.database import save_expense
+from app.services.llm import extract_expense_with_llm
 
 
 def extract_amount(message: str) -> Optional[float]:
@@ -66,26 +67,33 @@ def handle_expense_message(
     extracted_data: Dict[str, Any],
     user_id: str = "demo-user",
 ) -> Dict[str, Any]:
-    amount = extract_amount(message)
-    transaction_type = detect_transaction_type(message)
-    category = detect_category(message)
-    description = clean_description(message)
+    """
+    Expense Agent.
 
-    expense_data = {
-        "amount": amount,
-        "category": category,
-        "description": description,
-        "transaction_type": transaction_type,
-    }
+    Uses LLM extraction first, then validates and saves expense/income record.
+    """
 
-    if amount is None:
+    try:
+        llm_expense = extract_expense_with_llm(message)
+    except Exception as error:
+        print("LLM EXPENSE EXTRACTION ERROR:")
+        print(error)
+        llm_expense = {}
+
+    amount = llm_expense.get("amount")
+    category = llm_expense.get("category") or "other"
+    description = llm_expense.get("description") or message
+    transaction_type = llm_expense.get("transaction_type") or "debit"
+
+    if amount is None or amount <= 0:
         return {
-            "response": (
-                "Expense Agent: I detected this is an expense message, "
-                "but I could not find the amount. Please include the amount, "
-                "for example: I spent $25 on lunch."
-            ),
-            "extracted_data": expense_data,
+            "response": "Expense Agent: I understood this is a transaction, but I could not find a valid amount. Please include the amount.",
+            "extracted_data": {
+                "message": message,
+                "category": category,
+                "description": description,
+                "transaction_type": transaction_type,
+            },
         }
 
     expense_record = {
@@ -99,9 +107,9 @@ def handle_expense_message(
     saved_expense = save_expense(expense_record)
 
     if transaction_type == "credit":
-        response = f"Expense Agent: Saved income of ${amount:.2f} under {category}."
+        response = f"Expense Agent: Saved ${amount:.2f} as income under {category}."
     else:
-        response = f"Expense Agent: Saved expense of ${amount:.2f} under {category}."
+        response = f"Expense Agent: Saved ${amount:.2f} as spending under {category}."
 
     return {
         "response": response,
