@@ -28,6 +28,7 @@ from app.schemas import (
     UpdatePlaceResponse,
     DeletePlaceResponse,
     NearbyPlacesResponse,
+    PlacesWithDistancesResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -44,6 +45,7 @@ from app.services.database import (
     update_place_by_id,
     delete_place_by_id,
     get_nearby_places_by_user,
+    get_places_with_distances_by_user,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -461,4 +463,25 @@ def get_nearby_places(
         radius_km=radius_km,
         count=len(nearby_places),
         places=nearby_places,
+    )
+
+@app.get("/api/places/distances/{user_id}", response_model=PlacesWithDistancesResponse)
+def get_places_with_distances(
+    user_id: str,
+    latitude: float,
+    longitude: float,
+):
+    places = get_places_with_distances_by_user(
+        user_id=user_id,
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+    return PlacesWithDistancesResponse(
+        status="success",
+        user_id=user_id,
+        latitude=latitude,
+        longitude=longitude,
+        count=len(places),
+        places=places,
     )

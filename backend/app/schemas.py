@@ -222,3 +222,11 @@ class NearbyPlacesResponse(BaseModel):
     radius_km: float
     count: int
     places: List[Dict[str, Any]]
+
+class PlacesWithDistancesResponse(BaseModel):
+    status: str
+    user_id: str
+    latitude: float
+    longitude: float
+    count: int
+    places: List[Dict[str, Any]]

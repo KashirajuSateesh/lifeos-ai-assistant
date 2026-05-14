@@ -86,10 +86,17 @@ def clean_place_name(message: str) -> str:
 
     prefixes = [
         "i want to visit ",
+        "i want to vist ",
         "i want to go to ",
+        "i want to go ",
+        "save this place ",
+        "save place ",
         "save ",
+        "add this place ",
+        "add place ",
         "add ",
         "i liked this restaurant called ",
+        "i liked this place called ",
         "i liked ",
         "my favorite place is ",
         "i want to eat at ",
@@ -125,6 +132,7 @@ def detect_city(message: str) -> str | None:
         "houston",
         "nashville",
         "birmingham",
+        "marietta",
     ]
 
     for city in known_cities:
@@ -142,6 +150,58 @@ def build_photo_query(place_name: str, category: str, tags: list[str], city: str
         return f"{category} place"
 
     return " ".join(tags)
+
+def should_attempt_geocoding(message: str, city: str | None, category: str) -> bool:
+    """
+    Decides whether the message looks like a real address/place location.
+    """
+
+    normalized_message = message.lower()
+
+    address_clues = [
+        ",",
+        "street",
+        "st ",
+        "road",
+        "rd ",
+        "avenue",
+        "ave",
+        "drive",
+        "dr ",
+        "lane",
+        "ln ",
+        "boulevard",
+        "blvd",
+        "highway",
+        "hwy",
+        "southwest",
+        "southeast",
+        "northwest",
+        "northeast",
+        "ga",
+        "georgia",
+        "al",
+        "alabama",
+        "ny",
+        "ca",
+        "tx",
+        "fl",
+    ]
+
+    location_categories = [
+        "city",
+        "restaurant",
+        "park",
+        "shopping",
+        "travel",
+        "general",
+    ]
+
+    return (
+        city is not None
+        or category in location_categories
+        or any(clue in normalized_message for clue in address_clues)
+    )
 
 
 def handle_places_message(
@@ -171,9 +231,16 @@ def handle_places_message(
     status = detect_place_status(message)
     city = detect_city(message)
 
-    geocode_query = " ".join(
-        part for part in [place_name, city] if part
-    )
+    geocode_query = clean_place_name(message)
+
+    if city and city.lower() not in geocode_query.lower():
+        geocode_query = f"{geocode_query}, {city}"
+
+    if city and city.lower() not in geocode_query.lower():
+        geocode_query = f"{geocode_query}, {city}"
+
+    if city and city.lower() not in geocode_query.lower():
+        geocode_query = f"{geocode_query}, {city}"
 
     geocode_result = {
         "location_known": False,
@@ -189,7 +256,7 @@ def handle_places_message(
             "latitude": latitude,
             "longitude": longitude,
         }
-    elif city or category in ["city", "restaurant", "park", "shopping"]:
+    elif should_attempt_geocoding(message, city, category):
         geocode_result = geocode_place(geocode_query)
 
     photo_query = build_photo_query(place_name, category, tags, city)

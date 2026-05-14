@@ -66,7 +66,7 @@ def expand_short_url(url: str) -> str:
 def geocode_place(query: str) -> Dict[str, Any]:
     """
     Uses OpenStreetMap Nominatim to geocode a place query.
-    Returns address, latitude, and longitude when available.
+    Tries multiple query variations because exact place names may fail.
     """
 
     if not query.strip():
@@ -77,47 +77,71 @@ def geocode_place(query: str) -> Dict[str, Any]:
             "longitude": None,
         }
 
-    encoded_query = quote_plus(query)
+    query_attempts = []
 
-    url = (
-        "https://nominatim.openstreetmap.org/search"
-        f"?q={encoded_query}&format=json&limit=1&addressdetails=1"
-    )
+    cleaned_query = query.strip()
+    query_attempts.append(cleaned_query)
+
+    # If the query has commas, try removing the first segment.
+    # Example:
+    # Creekwood Townhomes, Massachusetts Street Southwest, Marietta, GA
+    # fallback:
+    # Massachusetts Street Southwest, Marietta, GA
+    if "," in cleaned_query:
+        parts = [part.strip() for part in cleaned_query.split(",") if part.strip()]
+
+        if len(parts) > 1:
+            query_attempts.append(", ".join(parts[1:]))
+
+        if len(parts) > 2:
+            query_attempts.append(", ".join(parts[-2:]))
 
     headers = {
-        "User-Agent": "LifeOS-AI-Assistant/0.1 contact@example.com"
+        "User-Agent": "LifeOS-AI-Assistant/0.1 (development project)"
     }
 
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(url, headers=headers)
-            response.raise_for_status()
-            results = response.json()
+    for attempt in query_attempts:
+        encoded_query = quote_plus(attempt)
 
-        if not results:
+        url = (
+            "https://nominatim.openstreetmap.org/search"
+            f"?q={encoded_query}&format=json&limit=1&addressdetails=1"
+        )
+
+        try:
+            print(f"Trying geocode query: {attempt}")
+
+            with httpx.Client(timeout=15.0) as client:
+                response = client.get(url, headers=headers)
+
+                print("Nominatim status:", response.status_code)
+
+                response.raise_for_status()
+                results = response.json()
+
+            if not results:
+                print(f"No geocode results for: {attempt}")
+                continue
+
+            first_result = results[0]
+
             return {
-                "location_known": False,
-                "address": None,
-                "latitude": None,
-                "longitude": None,
+                "location_known": True,
+                "address": first_result.get("display_name"),
+                "latitude": float(first_result["lat"]),
+                "longitude": float(first_result["lon"]),
             }
 
-        first_result = results[0]
+        except Exception as error:
+            print("NOMINATIM GEOCODING ERROR:")
+            print(error)
 
-        return {
-            "location_known": True,
-            "address": first_result.get("display_name"),
-            "latitude": float(first_result["lat"]),
-            "longitude": float(first_result["lon"]),
-        }
-
-    except Exception:
-        return {
-            "location_known": False,
-            "address": None,
-            "latitude": None,
-            "longitude": None,
-        }
+    return {
+        "location_known": False,
+        "address": None,
+        "latitude": None,
+        "longitude": None,
+    }
 
 
 def search_pexels_photo(query: str) -> Dict[str, Optional[str]]:

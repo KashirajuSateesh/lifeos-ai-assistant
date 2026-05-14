@@ -180,6 +180,8 @@ export type PlaceItem = {
   last_suggested_at?: string | null;
   notes?: string | null;
   created_at: string;
+  distance_km?: number | null;
+  distance_status?: string | null;
 };
 
 export type PlacesResponse = {
@@ -204,3 +206,24 @@ export type PlaceCategoryFilter =
   | "shopping"
   | "travel"
   | "general";
+
+export type NearbyPlacesResponse = {
+  status: string;
+  user_id: string;
+  latitude: number;
+  longitude: number;
+  radius_km: number;
+  count: number;
+  places: (PlaceItem & {
+    distance_km?: number;
+  })[];
+};
+
+export type PlacesWithDistancesResponse = {
+  status: string;
+  user_id: string;
+  latitude: number;
+  longitude: number;
+  count: number;
+  places: PlaceItem[];
+};

@@ -11,6 +11,8 @@ import {
   PlacesResponse,
   PlaceStatusFilter,
   PlaceCategoryFilter,
+  NearbyPlacesResponse,
+  PlacesWithDistancesResponse,
 } from "./types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -270,6 +272,48 @@ export async function deletePlace(placeId: string) {
 
   if (!response.ok) {
     throw new Error("Failed to delete place");
+  }
+
+  return response.json();
+}
+
+export async function getNearbyPlaces(params: {
+  latitude: number;
+  longitude: number;
+  radiusKm?: number;
+}): Promise<NearbyPlacesResponse> {
+  const queryParams = new URLSearchParams();
+
+  queryParams.set("latitude", String(params.latitude));
+  queryParams.set("longitude", String(params.longitude));
+  queryParams.set("radius_km", String(params.radiusKm ?? 10));
+
+  const response = await fetch(
+    `${getBackendUrl()}/api/places/nearby/${DEMO_USER_ID}?${queryParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch nearby places");
+  }
+
+  return response.json();
+}
+
+export async function getPlacesWithDistances(params: {
+  latitude: number;
+  longitude: number;
+}): Promise<PlacesWithDistancesResponse> {
+  const queryParams = new URLSearchParams();
+
+  queryParams.set("latitude", String(params.latitude));
+  queryParams.set("longitude", String(params.longitude));
+
+  const response = await fetch(
+    `${getBackendUrl()}/api/places/distances/${DEMO_USER_ID}?${queryParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch places with distances");
   }
 
   return response.json();

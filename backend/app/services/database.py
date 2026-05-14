@@ -499,3 +499,47 @@ def get_nearby_places_by_user(
     nearby_places.sort(key=lambda item: item["distance_km"])
 
     return nearby_places
+
+def get_places_with_distances_by_user(
+    user_id: str,
+    latitude: float,
+    longitude: float,
+) -> list[Dict[str, Any]]:
+    """
+    Returns all saved places.
+    If a place has coordinates, adds distance_km.
+    If not, distance_km stays None.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("places")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    places = result.data or []
+
+    for place in places:
+        place_latitude = place.get("latitude")
+        place_longitude = place.get("longitude")
+
+        if place_latitude is None or place_longitude is None:
+            place["distance_km"] = None
+            place["distance_status"] = "location_unknown"
+            continue
+
+        distance_km = calculate_distance_km(
+            latitude,
+            longitude,
+            float(place_latitude),
+            float(place_longitude),
+        )
+
+        place["distance_km"] = round(distance_km, 2)
+        place["distance_status"] = "calculated"
+
+    return places

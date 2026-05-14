@@ -5,10 +5,14 @@ import { useEffect, useState } from "react";
 import AppShell from "@/components/layout/AppShell";
 import {
   deletePlace as deletePlaceApi,
+  getNearbyPlaces,
   getPlaces,
+  getPlacesWithDistances,
   updatePlace,
 } from "@/lib/api";
+
 import {
+  NearbyPlacesResponse,
   PlaceCategoryFilter,
   PlaceItem,
   PlacesResponse,
@@ -51,6 +55,11 @@ export default function PlacesPage() {
   const [selectedCategory, setSelectedCategory] =
     useState<PlaceCategoryFilter>("all");
   const [loading, setLoading] = useState(false);
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlacesResponse | null>(
+  null
+  );
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyRadiusKm, setNearbyRadiusKm] = useState(10);
 
   async function fetchPlaces(
     status: PlaceStatusFilter = selectedStatus,
@@ -72,6 +81,103 @@ export default function PlacesPage() {
       setLoading(false);
     }
   }
+
+  async function checkNearbyPlaces() {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    setNearbyLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const data = await getNearbyPlaces({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            radiusKm: nearbyRadiusKm,
+          });
+
+          setNearbyPlaces(data);
+        } catch (error) {
+          console.error(error);
+          alert("Failed to check nearby places.");
+        } finally {
+          setNearbyLoading(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+
+        setNearbyLoading(false);
+
+        let message = "Unable to get your location.";
+
+        if (error.code === 1) {
+          message =
+            "Location permission was denied. Please allow location access in your browser settings.";
+        } else if (error.code === 2) {
+          message =
+            "Your location is unavailable. Make sure Windows location services are turned on.";
+        } else if (error.code === 3) {
+          message =
+            "Location request timed out. Try again or increase the timeout.";
+        }
+
+        alert(message);
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 20000,
+        maximumAge: 300000,
+      }
+    );
+  }
+
+  async function calculateAllPlaceDistances() {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by this browser.");
+      return;
+    }
+
+    setLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const data = await getPlacesWithDistances({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+
+          setPlacesData({
+            status: data.status,
+            user_id: data.user_id,
+            count: data.count,
+            places: data.places,
+          });
+        } catch (error) {
+          console.error(error);
+          alert("Failed to calculate distances.");
+        } finally {
+          setLoading(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setLoading(false);
+        alert("Unable to get your current location.");
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 20000,
+        maximumAge: 300000,
+      }
+    );
+  }
+
+
 
   async function handleStatusChange(status: PlaceStatusFilter) {
     setSelectedStatus(status);
@@ -154,12 +260,21 @@ export default function PlacesPage() {
               </p>
             </div>
 
-            <button
-              onClick={() => fetchPlaces(selectedStatus, selectedCategory)}
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
-            >
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => fetchPlaces(selectedStatus, selectedCategory)}
+                className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+              >
+                Refresh
+              </button>
+
+              <button
+                onClick={calculateAllPlaceDistances}
+                className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-700"
+              >
+                Show Distance on All Cards
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -203,6 +318,108 @@ export default function PlacesPage() {
               </select>
             </div>
           </div>
+        </section>
+
+
+        {/* Nearby Places */}
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+          <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-medium text-blue-400">Nearby Reminder</p>
+              <h2 className="text-2xl font-bold">Check Nearby Saved Places</h2>
+              <p className="mt-2 text-slate-400">
+                Allow location access to find saved places near you while the app is open.
+              </p>
+            </div>
+
+            <button
+              onClick={checkNearbyPlaces}
+              disabled={nearbyLoading}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+            >
+              {nearbyLoading ? "Checking..." : "Check Nearby Places"}
+            </button>
+          </div>
+
+          <div className="mb-5">
+            <label className="mb-2 block text-sm text-slate-400">
+              Search Radius: {nearbyRadiusKm} km
+            </label>
+
+            <input
+              type="range"
+              min="1"
+              max="50"
+              value={nearbyRadiusKm}
+              onChange={(event) => setNearbyRadiusKm(Number(event.target.value))}
+              className="w-full"
+            />
+          </div>
+
+          {nearbyPlaces && (
+            <div>
+              <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+                <div className="flex justify-between gap-4 text-sm">
+                  <span className="text-slate-400">Nearby Found</span>
+                  <span>{nearbyPlaces.count}</span>
+                </div>
+
+                <div className="mt-2 flex justify-between gap-4 text-sm">
+                  <span className="text-slate-400">Radius</span>
+                  <span>{nearbyPlaces.radius_km} km</span>
+                </div>
+              </div>
+
+              {nearbyPlaces.places.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {nearbyPlaces.places.map((place) => (
+                    <div
+                      key={`nearby-${place.id}`}
+                      className="rounded-xl border border-blue-500/40 bg-slate-800 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="font-semibold">{place.place_name}</p>
+                          <p className="mt-1 text-sm capitalize text-slate-400">
+                            {place.category ?? "general"} · {place.status.replace("_", " ")}
+                          </p>
+                        </div>
+
+                        <span className="rounded-full bg-blue-600 px-3 py-1 text-xs">
+                          {place.distance_km ?? "?"} km
+                        </span>
+                      </div>
+
+                      <p className="mt-3 text-sm text-slate-300">
+                        This saved place is nearby. Do you want to visit or try it?
+                      </p>
+
+                      {place.address && (
+                        <p className="mt-2 text-xs leading-5 text-slate-400">
+                          {place.address}
+                        </p>
+                      )}
+
+                      {place.source_url && (
+                        <a
+                          href={place.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-block rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700"
+                        >
+                          Open Link
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-400">
+                  No saved places found nearby within this radius.
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
@@ -280,6 +497,14 @@ export default function PlacesPage() {
                       )}
 
                     <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-400">Distance</span>
+                        <span className="text-right">
+                          {place.distance_km != null
+                            ? `${place.distance_km} km away`
+                            : "Location unknown"}
+                        </span>
+                      </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-slate-400">Location</span>
                         <span className="text-right">
