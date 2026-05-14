@@ -603,3 +603,84 @@ def update_place_last_suggested(place_id: str) -> Dict[str, Any]:
         raise RuntimeError("Failed to update place suggestion timestamp")
 
     return result.data[0]
+
+def get_profile_by_user(user_id: str) -> Dict[str, Any] | None:
+    """
+    Fetches profile for authenticated user.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("profiles")
+        .select("*")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+
+    if not result.data:
+        return None
+
+    return result.data[0]
+
+
+def create_profile(profile_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Creates a profile for authenticated user.
+    """
+
+    supabase = get_supabase_client()
+
+    result = supabase.table("profiles").insert(profile_data).execute()
+
+    if not result.data:
+        raise RuntimeError("Failed to create profile")
+
+    return result.data[0]
+
+
+def upsert_profile(profile_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Creates or updates profile based on user_id.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("profiles")
+        .upsert(profile_data, on_conflict="user_id")
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to upsert profile")
+
+    return result.data[0]
+
+
+def update_profile_by_user(
+    user_id: str,
+    update_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Updates profile for authenticated user.
+    """
+
+    from datetime import datetime, timezone
+
+    supabase = get_supabase_client()
+
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    result = (
+        supabase.table("profiles")
+        .update(update_data)
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to update profile")
+
+    return result.data[0]

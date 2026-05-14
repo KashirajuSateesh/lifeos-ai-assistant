@@ -32,6 +32,9 @@ from app.schemas import (
     UpdatePlaceResponse,
     UpdateTaskRequest,
     UpdateTaskResponse,
+    ProfileRequest,
+    ProfileResponse,
+    UpdateProfileResponse,
 )
 
 from app.services.auth import get_authenticated_user_id
@@ -54,6 +57,9 @@ from app.services.database import (
     update_place_by_id,
     update_place_last_suggested,
     update_task_by_id,
+    get_profile_by_user,
+    upsert_profile,
+    update_profile_by_user,
 )
 
 app = FastAPI(
@@ -584,4 +590,75 @@ def delete_place(
         status="success",
         deleted_place=deleted_place,
         message="Place deleted successfully",
+    )
+
+# -------------------------
+# Profile - Authenticated
+# -------------------------
+
+@app.get("/api/profile/me", response_model=ProfileResponse)
+def get_my_profile(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    profile = get_profile_by_user(authenticated_user_id)
+
+    if not profile:
+        return ProfileResponse(
+            status="success",
+            profile=None,
+            message="Profile not found",
+        )
+
+    return ProfileResponse(
+        status="success",
+        profile=profile,
+        message="Profile fetched successfully",
+    )
+
+
+@app.post("/api/profile/me", response_model=UpdateProfileResponse)
+def create_or_update_my_profile(
+    request: ProfileRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    profile_data = request.model_dump(exclude_none=True)
+    profile_data["user_id"] = authenticated_user_id
+
+    profile = upsert_profile(profile_data)
+
+    return UpdateProfileResponse(
+        status="success",
+        profile=profile,
+        message="Profile saved successfully",
+    )
+
+
+@app.patch("/api/profile/me", response_model=UpdateProfileResponse)
+def update_my_profile(
+    request: ProfileRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    update_data = request.model_dump(exclude_none=True)
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No profile fields provided",
+        )
+
+    existing_profile = get_profile_by_user(authenticated_user_id)
+
+    if not existing_profile:
+        update_data["user_id"] = authenticated_user_id
+        profile = upsert_profile(update_data)
+    else:
+        profile = update_profile_by_user(
+            user_id=authenticated_user_id,
+            update_data=update_data,
+        )
+
+    return UpdateProfileResponse(
+        status="success",
+        profile=profile,
+        message="Profile updated successfully",
     )
