@@ -22,6 +22,20 @@ export type ExtractedData = {
   summary?: string | null;
   entry_date?: string;
 
+    // Place fields
+  place_name?: string;
+  city?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  source_url?: string | null;
+  image_url?: string | null;
+  image_source?: string | null;
+  photo_credit?: string | null;
+  environment_tags?: string[] | null;
+  location_known?: boolean;
+  visited?: boolean;
+
   // Common fields
   created_at?: string;
 };
@@ -140,3 +154,53 @@ export type MonthlyJournalsResponse = {
   count: number;
   journals: JournalItem[];
 };
+
+// places agent related types
+
+export type PlaceItem = {
+  id: string;
+  user_id: string;
+  place_name: string;
+  description?: string | null;
+  category?: string | null;
+  environment_tags?: string[] | null;
+  status: "want_to_visit" | "favorite";
+  city?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  source_url?: string | null;
+  image_url?: string | null;
+  image_source?: string | null;
+  photo_credit?: string | null;
+  location_known: boolean;
+  visited: boolean;
+  visited_at?: string | null;
+  reminder_enabled: boolean;
+  last_suggested_at?: string | null;
+  notes?: string | null;
+  created_at: string;
+};
+
+export type PlacesResponse = {
+  status: string;
+  user_id: string;
+  count: number;
+  places: PlaceItem[];
+};
+
+export type PlaceStatusFilter = "all" | "want_to_visit" | "favorite";
+
+export type PlaceCategoryFilter =
+  | "all"
+  | "ocean"
+  | "mountain"
+  | "desert"
+  | "adventure"
+  | "restaurant"
+  | "movie"
+  | "park"
+  | "city"
+  | "shopping"
+  | "travel"
+  | "general";

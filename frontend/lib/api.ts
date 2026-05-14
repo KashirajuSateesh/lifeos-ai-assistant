@@ -8,6 +8,9 @@ import {
   TaskRemindersResponse,
   RecentJournalsResponse,
   MonthlyJournalsResponse,
+  PlacesResponse,
+  PlaceStatusFilter,
+  PlaceCategoryFilter,
 } from "./types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -208,6 +211,65 @@ export async function deleteJournal(journalId: string) {
 
   if (!response.ok) {
     throw new Error("Failed to delete journal");
+  }
+
+  return response.json();
+}
+
+// Places Agent related API functions
+
+export async function getPlaces(params?: {
+  status?: PlaceStatusFilter;
+  category?: PlaceCategoryFilter;
+}): Promise<PlacesResponse> {
+  const queryParams = new URLSearchParams();
+
+  if (params?.status && params.status !== "all") {
+    queryParams.set("status", params.status);
+  }
+
+  if (params?.category && params.category !== "all") {
+    queryParams.set("category", params.category);
+  }
+
+  const queryString = queryParams.toString();
+
+  const response = await fetch(
+    `${getBackendUrl()}/api/places/${DEMO_USER_ID}${
+      queryString ? `?${queryString}` : ""
+    }`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch places");
+  }
+
+  return response.json();
+}
+
+export async function updatePlace(placeId: string, data: Record<string, unknown>) {
+  const response = await fetch(`${getBackendUrl()}/api/places/${placeId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to update place");
+  }
+
+  return response.json();
+}
+
+export async function deletePlace(placeId: string) {
+  const response = await fetch(`${getBackendUrl()}/api/places/${placeId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete place");
   }
 
   return response.json();
