@@ -109,18 +109,14 @@ def geocode_place(query: str) -> Dict[str, Any]:
         )
 
         try:
-            print(f"Trying geocode query: {attempt}")
 
             with httpx.Client(timeout=15.0) as client:
                 response = client.get(url, headers=headers)
-
-                print("Nominatim status:", response.status_code)
 
                 response.raise_for_status()
                 results = response.json()
 
             if not results:
-                print(f"No geocode results for: {attempt}")
                 continue
 
             first_result = results[0]

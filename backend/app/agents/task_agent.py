@@ -87,7 +87,6 @@ def parse_weekday_due_date(date_text: str | None) -> str | None:
         microsecond=0,
     )
 
-    print("MANUAL WEEKDAY PARSED:", date_text, "→", due_datetime.isoformat())
 
     return due_datetime.isoformat()
 
@@ -154,13 +153,11 @@ def parse_due_date(date_text: str | None) -> str | None:
     parsed_date = dateparser.parse(parsed_text, settings=settings)
 
     if not parsed_date:
-        print("DATEPARSER COULD NOT PARSE:", date_text, "→", parsed_text)
+        print("DATEPARSER COULD NOT PARSE:", date_text, "->", parsed_text)
         return None
 
     if parsed_date.tzinfo is None:
         parsed_date = parsed_date.replace(tzinfo=timezone.utc)
-
-    print("DATEPARSER PARSED:", date_text, "→", parsed_date.isoformat())
 
     return parsed_date.isoformat()
 
@@ -178,9 +175,6 @@ def handle_task_message(
 
     try:
         llm_task = extract_task_with_llm(message)
-
-        print("LLM TASK EXTRACTION RESULT:")
-        print(llm_task)
 
     except Exception as error:
         print("LLM TASK EXTRACTION ERROR:")

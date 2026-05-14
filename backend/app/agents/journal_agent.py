@@ -116,9 +116,6 @@ def handle_journal_message(
     try:
         llm_journal = extract_journal_with_llm(entry_text)
 
-        print("LLM JOURNAL EXTRACTION RESULT:")
-        print(llm_journal)
-
     except Exception as error:
         print("LLM JOURNAL EXTRACTION ERROR:")
         print(error)

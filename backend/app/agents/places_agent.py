@@ -228,9 +228,6 @@ def handle_places_message(
     try:
         llm_place = extract_place_with_llm(message)
 
-        print("LLM PLACE EXTRACTION RESULT:")
-        print(llm_place)
-
     except Exception as error:
         print("LLM PLACE EXTRACTION ERROR:")
         print(error)
