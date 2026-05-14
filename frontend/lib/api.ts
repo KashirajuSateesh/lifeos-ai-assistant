@@ -15,6 +15,9 @@ import {
   NearbyPlacesResponse,
   PlacesWithDistancesResponse,
   PlaceSuggestionsResponse,
+  ProfilePayload,
+  ProfileResponse,
+  UpdateProfileResponse,
 } from "./types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -386,6 +389,57 @@ export async function getPlaceSuggestions(
 
   if (!response.ok) {
     throw new Error("Failed to fetch place suggestions");
+  }
+
+  return response.json();
+}
+
+// Profile related API functions
+export async function getMyProfile(): Promise<ProfileResponse> {
+  const response = await fetch(`${getBackendUrl()}/api/profile/me`, {
+    headers: await getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Get profile error:", response.status, errorText);
+    throw new Error("Failed to fetch profile");
+  }
+
+  return response.json();
+}
+
+export async function saveMyProfile(
+  data: ProfilePayload
+): Promise<UpdateProfileResponse> {
+  const response = await fetch(`${getBackendUrl()}/api/profile/me`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Save profile error:", response.status, errorText);
+    throw new Error("Failed to save profile");
+  }
+
+  return response.json();
+}
+
+export async function updateMyProfile(
+  data: ProfilePayload
+): Promise<UpdateProfileResponse> {
+  const response = await fetch(`${getBackendUrl()}/api/profile/me`, {
+    method: "PATCH",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Update profile error:", response.status, errorText);
+    throw new Error("Failed to update profile");
   }
 
   return response.json();

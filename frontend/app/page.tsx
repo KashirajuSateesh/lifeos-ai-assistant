@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 
 import AppShell from "@/components/layout/AppShell";
-import { getExpenses, getTaskReminders, getTasks } from "@/lib/api";
+import { getExpenses, getMyProfile, getTaskReminders, getTasks } from "@/lib/api";
 import {
   ExpensesResponse,
+  Profile,
   TaskRemindersResponse,
   TasksResponse,
 } from "@/lib/types";
@@ -18,20 +19,23 @@ export default function DashboardPage() {
   const [taskReminders, setTaskReminders] =
     useState<TaskRemindersResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   async function loadDashboardData() {
     setLoading(true);
 
     try {
-      const [expenses, tasks, reminders] = await Promise.all([
+      const [expenses, tasks, reminders, profileResponse] = await Promise.all([
         getExpenses({ period: "this_month", category: "all" }),
         getTasks("all"),
         getTaskReminders(),
+        getMyProfile(),
       ]);
 
       setExpensesData(expenses);
       setTasksData(tasks);
       setTaskReminders(reminders);
+      setProfile(profileResponse.profile);
     } catch (error) {
       console.error(error);
       alert("Failed to load dashboard data.");
@@ -50,7 +54,30 @@ export default function DashboardPage() {
         <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
           <div>
             <p className="text-sm font-medium text-blue-400">Dashboard</p>
-            <h1 className="text-3xl font-bold">LifeOS Overview</h1>
+            <div className="flex items-center gap-4">
+              {profile?.profile_photo_url ? (
+                <img
+                  src={profile.profile_photo_url}
+                  alt="Profile"
+                  className="h-16 w-16 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-bold">
+                  {`${profile?.first_name?.[0] ?? ""}${profile?.last_name?.[0] ?? ""}`.toUpperCase() ||
+                    "U"}
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-medium text-blue-400">Dashboard</p>
+                <h1 className="text-3xl font-bold">
+                  Welcome back, {profile?.first_name || "there"} 👋
+                </h1>
+                <p className="mt-2 text-slate-400">
+                  Here is a quick summary of your money, tasks, and reminders.
+                </p>
+              </div>
+            </div>
             <p className="mt-2 text-slate-400">
               A quick summary of your money, tasks, and reminders.
             </p>

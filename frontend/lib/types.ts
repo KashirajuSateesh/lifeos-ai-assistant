@@ -234,3 +234,37 @@ export type PlaceSuggestionsResponse = {
   count: number;
   places: PlaceItem[];
 };
+
+// Profile related types
+
+export type Profile = {
+  id: string;
+  user_id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone_number?: string | null;
+  birthdate?: string | null;
+  profile_photo_url?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProfileResponse = {
+  status: string;
+  profile: Profile | null;
+  message: string;
+};
+
+export type UpdateProfileResponse = {
+  status: string;
+  profile: Profile;
+  message: string;
+};
+
+export type ProfilePayload = {
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  birthdate?: string;
+  profile_photo_url?: string;
+};

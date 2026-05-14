@@ -3,20 +3,32 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { saveMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [birthdate, setBirthdate] = useState("");
 
   const [loading, setLoading] = useState(false);
 
   async function handleAuth() {
     if (!email.trim() || !password.trim()) {
       alert("Please enter email and password.");
+      return;
+    }
+
+    if (mode === "signup" && (!firstName.trim() || !lastName.trim())) {
+      alert("Please enter first name and last name.");
       return;
     }
 
@@ -33,7 +45,23 @@ export default function LoginPage() {
           throw error;
         }
 
-        alert("Signup successful. Check your email if confirmation is required.");
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (loginError) {
+          throw loginError;
+        }
+
+        await saveMyProfile({
+          first_name: firstName,
+          last_name: lastName,
+          phone_number: phoneNumber,
+          birthdate,
+        });
+
+        router.push("/");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -55,7 +83,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-white">
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-white">
       <section className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
         <div className="mb-6">
           <p className="text-sm font-medium text-blue-400">LifeOS</p>
@@ -68,6 +96,48 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-3">
+          {mode === "signup" && (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <input
+                  type="text"
+                  placeholder="First name"
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+                />
+
+                <input
+                  type="text"
+                  placeholder="Last name"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <input
+                type="tel"
+                placeholder="Phone number"
+                value={phoneNumber}
+                onChange={(event) => setPhoneNumber(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              />
+
+              <div>
+                <label className="mb-1 block text-sm text-slate-400">
+                  Birthdate
+                </label>
+                <input
+                  type="date"
+                  value={birthdate}
+                  onChange={(event) => setBirthdate(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+                />
+              </div>
+            </>
+          )}
+
           <input
             type="email"
             placeholder="Email"
