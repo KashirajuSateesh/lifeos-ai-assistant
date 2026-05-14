@@ -121,6 +121,7 @@ export default function ChatPage() {
                 </div>
               )}
 
+               {/* Task Agent saved card*/}
               {chatResponse.selected_agent === "task_agent" && chatResponse.extracted_data && (
                 <div className="rounded-xl border border-purple-500/40 bg-slate-800 p-4">
                   <div className="mb-3 flex items-center justify-between">
@@ -129,6 +130,8 @@ export default function ChatPage() {
                       {String(chatResponse.extracted_data.priority ?? "medium")}
                     </span>
                   </div>
+
+
 
                   <div className="space-y-2 text-sm">
                     <div>
@@ -149,6 +152,47 @@ export default function ChatPage() {
                   </div>
                 </div>
               )}
+
+              {/* Journal Saved card */}
+              {chatResponse.selected_agent === "journal_agent" &&
+                    chatResponse.extracted_data && (
+                      <div className="rounded-xl border border-emerald-500/40 bg-slate-800 p-4">
+                        <div className="mb-3 flex items-center justify-between">
+                          <p className="font-semibold">Journal Saved</p>
+                          <span className="rounded-full bg-emerald-600 px-3 py-1 text-xs capitalize">
+                            {String(chatResponse.extracted_data.mood ?? "neutral")}
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 text-sm">
+                          <div>
+                            <p className="mb-1 text-slate-400">Summary</p>
+                            <p>{String(chatResponse.extracted_data.summary ?? "N/A")}</p>
+                          </div>
+
+                          <div className="border-t border-slate-700 pt-2">
+                            <p className="mb-1 text-slate-400">Entry Date</p>
+                            <p>{String(chatResponse.extracted_data.entry_date ?? "N/A")}</p>
+                          </div>
+
+                          {chatResponse.extracted_data.tags && (
+                            <div className="border-t border-slate-700 pt-2">
+                              <p className="mb-2 text-slate-400">Tags</p>
+                              <div className="flex flex-wrap gap-2">
+                                {chatResponse.extracted_data.tags.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
+                                  >
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
             </div>
           )}
         </section>

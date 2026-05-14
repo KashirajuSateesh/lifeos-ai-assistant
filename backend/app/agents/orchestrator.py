@@ -3,10 +3,10 @@ from typing import Dict, Any
 
 def classify_intent(message: str) -> Dict[str, Any]:
     """
-    Simple rule-based intent classifier.
+    Rule-based intent classifier.
 
-    This is our first version of the Orchestrator Agent.
-    Later, we will replace this with an LLM-based classifier and LangGraph.
+    This is the current Orchestrator Agent.
+    It decides which sub-agent should handle the user message.
     """
 
     normalized_message = message.lower().strip()
@@ -27,21 +27,6 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "gas",
     ]
 
-    task_keywords = [
-        "remind me",
-        "reminder",
-        "todo",
-        "task",
-        "add task",
-        "add todo",
-        "call",
-        "submit",
-        "finish",
-        "complete",
-        "pay rent",
-        "due",
-    ]
-
     journal_keywords = [
         "journal",
         "today i felt",
@@ -52,8 +37,6 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "i worked on",
         "i am feeling",
         "i was feeling",
-        "write this",
-        "note this",
         "reflection",
         "thoughts",
     ]
@@ -77,6 +60,21 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "great",
     ]
 
+    task_keywords = [
+        "remind me",
+        "reminder",
+        "todo",
+        "task",
+        "add task",
+        "add todo",
+        "call",
+        "submit",
+        "finish",
+        "complete",
+        "pay rent",
+        "due",
+    ]
+
     place_keywords = [
         "visit",
         "place",
@@ -87,7 +85,7 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "trip",
     ]
 
-    # 1. Expense should be checked early because money messages are usually clear.
+    # 1. Expense messages are usually clear and short.
     if any(keyword in normalized_message for keyword in expense_keywords):
         return {
             "intent": "expense_create",
@@ -95,8 +93,8 @@ def classify_intent(message: str) -> Dict[str, Any]:
             "extracted_data": {},
         }
 
-    # 2. Strong journal detection.
-    # Long reflective text should go to Journal Agent even if it contains words like project/work/complete.
+    # 2. Long reflective text should go to Journal Agent.
+    # This prevents journal entries from being incorrectly routed to Task Agent.
     is_reflective_journal = (
         word_count >= 15
         and (
@@ -122,7 +120,6 @@ def classify_intent(message: str) -> Dict[str, Any]:
         }
 
     # 4. Task detection after journal detection.
-    # This prevents long journal entries from becoming tasks.
     if any(keyword in normalized_message for keyword in task_keywords):
         return {
             "intent": "task_create",
