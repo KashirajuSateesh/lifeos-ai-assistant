@@ -84,6 +84,30 @@ export default function ChatPage() {
                   <div className="flex justify-between gap-4">
                     <span className="text-slate-400">Selected Agent</span>
                     <span>{chatResponse.selected_agent ?? "N/A"}</span>
+
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Routing Source</span>
+                      <span>{chatResponse.routing_source ?? "N/A"}</span>
+                    </div>
+
+                    <div className="flex justify-between gap-4">
+                      <span className="text-slate-400">Confidence</span>
+                      <span>
+                        {chatResponse.confidence != null
+                          ? `${Math.round(chatResponse.confidence * 100)}%`
+                          : "N/A"}
+                      </span>
+                    </div>
+
+                    {chatResponse.routing_reason && (
+                      <div className="border-t border-slate-700 pt-2">
+                        <p className="mb-1 text-slate-400">Reason</p>
+                        <p>{chatResponse.routing_reason}</p>
+                      </div>
+                    )}
+                    
+
+
                   </div>
                 </div>
               </div>

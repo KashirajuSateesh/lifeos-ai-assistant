@@ -15,6 +15,9 @@ class ChatResponse(BaseModel):
     selected_agent: Optional[str] = None
     extracted_data: Optional[Dict[str, Any]] = None
     response: str
+    confidence: Optional[float] = None
+    routing_source: Optional[str] = None
+    routing_reason: Optional[str] = None
 
 
 class ExpenseItem(BaseModel):

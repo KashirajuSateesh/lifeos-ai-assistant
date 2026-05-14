@@ -204,6 +204,9 @@ def chat(
         selected_agent=selected_agent,
         extracted_data=agent_result.get("extracted_data"),
         response=agent_result["response"],
+        confidence=routing_result.get("confidence"),
+        routing_source=routing_result.get("routing_source"),
+        routing_reason=routing_result.get("routing_reason"),
     )
 
 

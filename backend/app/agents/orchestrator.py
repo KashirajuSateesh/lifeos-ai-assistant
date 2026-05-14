@@ -1,5 +1,14 @@
-from typing import Dict, Any
+import os
 import re
+from typing import Any, Dict
+
+from dotenv import load_dotenv
+
+from app.services.llm import classify_message_with_llm
+
+load_dotenv()
+
+USE_LLM_ORCHESTRATOR = os.getenv("USE_LLM_ORCHESTRATOR", "true").lower() == "true"
 
 
 def contains_phrase(message: str, phrases: list[str]) -> bool:
@@ -24,13 +33,40 @@ def contains_phrase(message: str, phrases: list[str]) -> bool:
 
 def classify_intent(message: str) -> Dict[str, Any]:
     """
-    Rule-based intent classifier.
+    Main Orchestrator.
 
-    Current Orchestrator Agent:
-    - Detects expense
-    - Detects journal
-    - Detects places
-    - Detects tasks
+    First tries OpenAI LLM classification.
+    If OpenAI fails, falls back to rule-based classification.
+    """
+
+    if USE_LLM_ORCHESTRATOR:
+        try:
+            llm_result = classify_message_with_llm(message)
+
+            # If confidence is very low, fallback to rules.
+            if llm_result.get("confidence", 0.0) >= 0.55:
+                return {
+                    "intent": llm_result["intent"],
+                    "selected_agent": llm_result["selected_agent"],
+                    "extracted_data": llm_result.get("extracted_data", {}),
+                    "confidence": llm_result.get("confidence", 0.0),
+                    "routing_source": "llm",
+                    "routing_reason": llm_result.get("reason", ""),
+                }
+
+        except Exception as error:
+            print("LLM ORCHESTRATOR ERROR:")
+            print(error)
+
+    rule_result = classify_intent_rule_based(message)
+    rule_result["routing_source"] = "rule_based_fallback"
+    return rule_result
+
+
+def classify_intent_rule_based(message: str) -> Dict[str, Any]:
+    """
+    Fallback rule-based classifier.
+    Used when OpenAI fails or confidence is low.
     """
 
     normalized_message = message.lower().strip()
@@ -49,6 +85,8 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "dinner",
         "groceries",
         "gas",
+        "salary",
+        "income",
     ]
 
     journal_keywords = [
@@ -105,7 +143,6 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "trip",
         "liked this restaurant",
         "liked this place",
-        "bombay grill",
         "google maps",
         "maps.google",
     ]
@@ -125,15 +162,14 @@ def classify_intent(message: str) -> Dict[str, Any]:
         "due",
     ]
 
-    # 1. Expense messages are usually clear.
     if contains_phrase(normalized_message, expense_keywords):
         return {
             "intent": "expense_create",
             "selected_agent": "expense_agent",
             "extracted_data": {},
+            "confidence": 0.75,
         }
 
-    # 2. Long reflective text should go to Journal Agent.
     is_reflective_journal = (
         word_count >= 15
         and (
@@ -148,35 +184,36 @@ def classify_intent(message: str) -> Dict[str, Any]:
             "intent": "journal_create",
             "selected_agent": "journal_agent",
             "extracted_data": {},
+            "confidence": 0.75,
         }
 
-    # 3. Explicit journal request.
     if contains_phrase(normalized_message, journal_keywords):
         return {
             "intent": "journal_create",
             "selected_agent": "journal_agent",
             "extracted_data": {},
+            "confidence": 0.7,
         }
 
-    # 4. Places before tasks.
-    # This prevents "called Bombay Grill" from matching task keyword "call".
     if contains_phrase(normalized_message, place_keywords) or "http" in normalized_message:
         return {
             "intent": "place_create",
             "selected_agent": "places_agent",
             "extracted_data": {},
+            "confidence": 0.7,
         }
 
-    # 5. Task detection.
     if contains_phrase(normalized_message, task_keywords):
         return {
             "intent": "task_create",
             "selected_agent": "task_agent",
             "extracted_data": {},
+            "confidence": 0.7,
         }
 
     return {
         "intent": "general_chat",
         "selected_agent": "orchestrator",
         "extracted_data": {},
+        "confidence": 0.5,
     }

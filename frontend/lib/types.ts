@@ -48,6 +48,9 @@ export type ChatResponse = {
   selected_agent?: string | null;
   extracted_data?: ExtractedData | null;
   response: string;
+  confidence?: number | null;
+  routing_source?: string | null;
+  routing_reason?: string | null;
 };
 
 export type ExpenseItem = {
