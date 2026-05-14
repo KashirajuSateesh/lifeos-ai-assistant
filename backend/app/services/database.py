@@ -421,3 +421,81 @@ def delete_place_by_id(place_id: str) -> Dict[str, Any]:
         raise RuntimeError("Failed to delete place or place not found")
 
     return result.data[0]
+
+# distance helper
+
+import math
+
+
+def calculate_distance_km(
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+) -> float:
+    """
+    Calculates distance between two latitude/longitude points using Haversine formula.
+    """
+
+    earth_radius_km = 6371
+
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
+
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return earth_radius_km * c
+
+
+def get_nearby_places_by_user(
+    user_id: str,
+    latitude: float,
+    longitude: float,
+    radius_km: float = 10,
+) -> list[Dict[str, Any]]:
+    """
+    Finds saved places near the user's current location.
+    Only checks places that have latitude and longitude.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("places")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("location_known", True)
+        .execute()
+    )
+
+    places = result.data or []
+    nearby_places = []
+
+    for place in places:
+        place_latitude = place.get("latitude")
+        place_longitude = place.get("longitude")
+
+        if place_latitude is None or place_longitude is None:
+            continue
+
+        distance_km = calculate_distance_km(
+            latitude,
+            longitude,
+            float(place_latitude),
+            float(place_longitude),
+        )
+
+        if distance_km <= radius_km:
+            place["distance_km"] = round(distance_km, 2)
+            nearby_places.append(place)
+
+    nearby_places.sort(key=lambda item: item["distance_km"])
+
+    return nearby_places

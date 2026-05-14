@@ -27,6 +27,7 @@ from app.schemas import (
     UpdatePlaceRequest,
     UpdatePlaceResponse,
     DeletePlaceResponse,
+    NearbyPlacesResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -42,6 +43,7 @@ from app.services.database import (
     get_places_by_user,
     update_place_by_id,
     delete_place_by_id,
+    get_nearby_places_by_user,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -433,4 +435,30 @@ def delete_place(place_id: str):
         status="success",
         deleted_place=deleted_place,
         message="Place deleted successfully",
+    )
+
+# Distance-based place suggestions endpoint
+
+@app.get("/api/places/nearby/{user_id}", response_model=NearbyPlacesResponse)
+def get_nearby_places(
+    user_id: str,
+    latitude: float,
+    longitude: float,
+    radius_km: float = 10,
+):
+    nearby_places = get_nearby_places_by_user(
+        user_id=user_id,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+    )
+
+    return NearbyPlacesResponse(
+        status="success",
+        user_id=user_id,
+        latitude=latitude,
+        longitude=longitude,
+        radius_km=radius_km,
+        count=len(nearby_places),
+        places=nearby_places,
     )

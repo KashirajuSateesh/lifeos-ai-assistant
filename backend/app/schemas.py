@@ -213,3 +213,12 @@ class DeletePlaceResponse(BaseModel):
     status: str
     deleted_place: Dict[str, Any]
     message: str
+
+class NearbyPlacesResponse(BaseModel):
+    status: str
+    user_id: str
+    latitude: float
+    longitude: float
+    radius_km: float
+    count: int
+    places: List[Dict[str, Any]]
