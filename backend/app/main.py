@@ -8,6 +8,9 @@ from app.agents.task_agent import handle_task_message
 from app.agents.journal_agent import handle_journal_message
 from app.agents.places_agent import handle_places_message
 
+from fastapi import Depends
+from app.services.auth import get_bearer_token
+
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -508,3 +511,12 @@ def get_place_suggestions(
         count=len(suggestions),
         places=suggestions,
     )
+
+# login and authentication endpoints
+@app.get("/api/auth/test")
+def auth_test(token: str = Depends(get_bearer_token)):
+    return {
+        "status": "success",
+        "message": "Authorization token received by backend",
+        "token_preview": token[:20] + "...",
+    } 

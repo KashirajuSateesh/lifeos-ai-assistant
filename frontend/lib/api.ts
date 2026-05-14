@@ -1,3 +1,4 @@
+import { supabase } from "./supabase";
 import {
   ChatResponse,
   ExpensesResponse,
@@ -20,6 +21,22 @@ const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export const DEMO_USER_ID = "demo-user";
 
+async function getAuthHeaders() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+
+  return headers;
+}
+
 function getBackendUrl() {
   if (!backendUrl) {
     throw new Error("NEXT_PUBLIC_BACKEND_URL is not defined");
@@ -31,9 +48,7 @@ function getBackendUrl() {
 export async function sendChatMessage(message: string): Promise<ChatResponse> {
   const response = await fetch(`${getBackendUrl()}/api/chat`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: await getAuthHeaders(),
     body: JSON.stringify({
       user_id: DEMO_USER_ID,
       message,
