@@ -205,10 +205,9 @@ export default function JournalPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Journal</p>
           <h1 className="text-3xl font-bold">Daily Journal</h1>
           <p className="mt-2 text-slate-400">
-            Write long reflections, track mood, and view journals by month and week.
+            Write reflections, track mood, and browse entries by month and week.
           </p>
         </div>
 

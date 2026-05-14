@@ -25,7 +25,10 @@ export default function Sidebar() {
     <aside className="hidden min-h-screen w-64 border-r border-slate-800 bg-slate-950 p-5 text-white lg:block">
       <div className="mb-8">
         <p className="text-sm font-medium text-blue-400">LifeOS</p>
-        <h1 className="text-xl font-bold">AI Assistant</h1>
+        <h1 className="text-xl font-bold">Personal AI Assistant</h1>
+        <p className="mt-1 text-xs text-slate-500">
+          Expenses, tasks, journals, and places.
+        </p>
       </div>
 
       <nav className="space-y-2">

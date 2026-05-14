@@ -202,18 +202,16 @@ export default function ExpensesPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Expenses</p>
           <h1 className="text-3xl font-bold">Money Overview</h1>
           <p className="mt-2 text-slate-400">
-            Track money in, money out, net balance, category spending, and custom
-            date ranges.
+            Track income, spending, category filters, and custom date ranges.
           </p>
         </div>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-bold">Expense Management</h2>
+              <h2 className="text-2xl font-bold">Transactions</h2>
               <p className="mt-2 text-slate-400">
                 Filter transactions by time period and category.
               </p>

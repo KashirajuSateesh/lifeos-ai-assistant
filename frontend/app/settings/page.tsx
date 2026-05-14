@@ -221,10 +221,9 @@ export default function SettingsPage() {
     <AppShell>
       <div className="mx-auto max-w-4xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Settings</p>
           <h1 className="text-3xl font-bold">Account Settings</h1>
           <p className="mt-2 text-slate-400">
-            Manage your profile, password, and account preferences.
+            View and update your profile, password, and account preferences.
           </p>
         </div>
 

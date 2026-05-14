@@ -88,10 +88,10 @@ export default function LoginPage() {
         <div className="mb-6">
           <p className="text-sm font-medium text-blue-400">LifeOS</p>
           <h1 className="text-3xl font-bold">
-            {mode === "login" ? "Login" : "Create Account"}
+            {mode === "login" ? "Welcome Back" : "Create Your Account"}
           </h1>
           <p className="mt-2 text-slate-400">
-            Sign in to use your personal AI assistant.
+            Your personal AI assistant for expenses, tasks, journals, places, and daily planning.
           </p>
         </div>
 

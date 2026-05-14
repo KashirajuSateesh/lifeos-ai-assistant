@@ -41,10 +41,9 @@ export default function ChatPage() {
     <AppShell>
       <div className="mx-auto max-w-3xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Chat</p>
           <h1 className="text-3xl font-bold">AI Assistant Chat</h1>
           <p className="mt-2 text-slate-400">
-            Talk naturally. The orchestrator will route your request to the right agent.
+            Type naturally to log expenses, create reminders, write journals, or save places.
           </p>
         </div>
 

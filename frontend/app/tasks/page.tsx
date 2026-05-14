@@ -134,10 +134,9 @@ export default function TasksPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Tasks</p>
           <h1 className="text-3xl font-bold">Tasks & Reminders</h1>
           <p className="mt-2 text-slate-400">
-            Track todos, reminders, due dates, overdue tasks, and follow-ups.
+            Manage todos, due dates, overdue items, and follow-ups.
           </p>
         </div>
 

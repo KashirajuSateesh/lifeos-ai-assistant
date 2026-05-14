@@ -63,36 +63,30 @@ export default function DashboardPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-6xl">
+        
         <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
-          <div>
-            <p className="text-sm font-medium text-blue-400">Dashboard</p>
-            <div className="flex items-center gap-4">
-              {profile?.profile_photo_url ? (
-                <img
-                  src={profile.profile_photo_url}
-                  alt="Profile"
-                  className="h-16 w-16 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-bold">
-                  {`${profile?.first_name?.[0] ?? ""}${profile?.last_name?.[0] ?? ""}`.toUpperCase() ||
-                    "U"}
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm font-medium text-blue-400">Dashboard</p>
-                <h1 className="text-3xl font-bold">
-                  Welcome back, {profile?.first_name || "there"} 👋
-                </h1>
-                <p className="mt-2 text-slate-400">
-                  Here is a quick summary of your money, tasks, and reminders.
-                </p>
+          <div className="flex items-center gap-4">
+            {profile?.profile_photo_url ? (
+              <img
+                src={profile.profile_photo_url}
+                alt="Profile"
+                className="h-16 w-16 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-xl font-bold">
+                {`${profile?.first_name?.[0] ?? ""}${profile?.last_name?.[0] ?? ""}`.toUpperCase() ||
+                  "U"}
               </div>
+            )}
+
+            <div>
+              <h1 className="text-3xl font-bold">
+                Welcome back, {profile?.first_name || "there"} 👋
+              </h1>
+              <p className="mt-2 text-slate-400">
+                Your personal overview for money, reminders, journals, and saved places.
+              </p>
             </div>
-            <p className="mt-2 text-slate-400">
-              A quick summary of your money, tasks, and reminders.
-            </p>
           </div>
 
           <button

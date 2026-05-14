@@ -279,11 +279,9 @@ export default function PlacesPage() {
     <AppShell>
       <div className="mx-auto max-w-6xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">Places</p>
-          <h1 className="text-3xl font-bold">Places Memory</h1>
+          <h1 className="text-3xl font-bold">Saved Places</h1>
           <p className="mt-2 text-slate-400">
-            Save places you want to visit, favorite spots, map links, and
-            travel ideas with photos and location details.
+            Save favorite places, travel ideas, map links, photos, and location reminders.
           </p>
         </div>
 
