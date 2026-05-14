@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
 import { getExpenses, getMyProfile, getTaskReminders, getTasks } from "@/lib/api";
@@ -12,6 +14,7 @@ import {
 } from "@/lib/types";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(
     null
   );
@@ -25,6 +28,15 @@ export default function DashboardPage() {
     setLoading(true);
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
       const [expenses, tasks, reminders, profileResponse] = await Promise.all([
         getExpenses({ period: "this_month", category: "all" }),
         getTasks("all"),

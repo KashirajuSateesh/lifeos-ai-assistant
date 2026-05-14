@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -24,6 +26,7 @@ const taskPriorityOptions: { label: string; value: TaskPriorityFilter }[] = [
 ];
 
 export default function TasksPage() {
+  const router = useRouter();
   const [tasksData, setTasksData] = useState<TasksResponse | null>(null);
   const [taskReminders, setTaskReminders] =
     useState<TaskRemindersResponse | null>(null);
@@ -99,8 +102,21 @@ export default function TasksPage() {
   }
 
   useEffect(() => {
-    fetchTasks("all");
-    fetchTaskReminders();
+    async function loadPage() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      await fetchTasks("all");
+      await fetchTaskReminders();
+    }
+
+    loadPage();
   }, []);
 
   const overdueFollowUpTasks = taskReminders

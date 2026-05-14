@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -64,6 +66,7 @@ function moodBadgeClass(mood?: string | null) {
 }
 
 export default function JournalPage() {
+  const router = useRouter();
   const currentDate = new Date();
 
   const [journalText, setJournalText] = useState("");
@@ -176,8 +179,24 @@ export default function JournalPage() {
   }
 
   useEffect(() => {
-    fetchRecentJournals();
-    fetchMonthlyJournals(currentDate.getFullYear(), currentDate.getMonth() + 1);
+    async function loadPage() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      await fetchRecentJournals();
+      await fetchMonthlyJournals(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1
+      );
+    }
+
+    loadPage();
   }, []);
 
   const years = Array.from({ length: 6 }, (_, index) => currentDate.getFullYear() - index);

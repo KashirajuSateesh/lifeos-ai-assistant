@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import AppShell from "@/components/layout/AppShell";
 import { deleteMyAccount, getMyProfile, updateMyProfile } from "@/lib/api";
@@ -8,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { Profile } from "@/lib/types";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const [firstName, setFirstName] = useState("");
@@ -34,6 +36,11 @@ export default function SettingsPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
 
       setEmail(user?.email ?? "");
 

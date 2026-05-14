@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -41,6 +43,7 @@ const expenseCategoryOptions: {
 ];
 
 export default function ExpensesPage() {
+  const router = useRouter();
   const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(
     null
   );
@@ -179,7 +182,20 @@ export default function ExpensesPage() {
   }
 
   useEffect(() => {
-    fetchExpenses("all", "all");
+    async function loadPage() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      await fetchExpenses("all", "all");
+    }
+
+    loadPage();
   }, []);
 
   return (

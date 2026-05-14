@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
 import {
@@ -51,6 +53,7 @@ function placeImage(place: PlaceItem) {
 }
 
 export default function PlacesPage() {
+  const router = useRouter();
   const [placesData, setPlacesData] = useState<PlacesResponse | null>(null);
   const [selectedStatus, setSelectedStatus] =
     useState<PlaceStatusFilter>("all");
@@ -255,8 +258,21 @@ export default function PlacesPage() {
   }
 
   useEffect(() => {
-    fetchPlaces("all", "all");
-    fetchPlaceSuggestions();
+    async function loadPage() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      await fetchPlaces("all", "all");
+      await fetchPlaceSuggestions();
+    }
+
+    loadPage();
   }, []);
 
   return (
