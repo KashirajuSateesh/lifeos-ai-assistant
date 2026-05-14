@@ -1,84 +1,95 @@
 from datetime import datetime, timedelta, timezone
-import dateparser, re
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+import re
+
+import dateparser
 
 from app.services.database import save_task
 from app.services.llm import extract_task_with_llm
 
 
-def detect_priority(message: str) -> str:
+def get_time_from_text(text: str) -> tuple[int, int]:
     """
-    Detect task priority from the user message.
-    """
-
-    normalized_message = message.lower()
-
-    if any(word in normalized_message for word in ["urgent", "important", "asap", "high priority"]):
-        return "high"
-
-    if any(word in normalized_message for word in ["low priority", "not urgent", "whenever"]):
-        return "low"
-
-    return "medium"
-
-
-def extract_due_date(message: str) -> Optional[str]:
-    """
-    Basic date extraction for first version.
-
-    Later, we will use LLM extraction for better dates like:
-    - next Friday
-    - after 2 weeks
-    - May 20 at 5 PM
+    Converts vague time words into hour/minute.
     """
 
-    normalized_message = message.lower()
+    text = text.lower()
+
+    if "morning" in text:
+        return 9, 0
+
+    if "afternoon" in text:
+        return 14, 0
+
+    if "evening" in text:
+        return 18, 0
+
+    if "night" in text or "tonight" in text:
+        return 20, 0
+
+    return 9, 0
+
+
+def parse_weekday_due_date(date_text: str | None) -> str | None:
+    """
+    Manually parses weekday phrases like:
+    - Friday evening
+    - next Friday evening
+    - Monday morning
+    """
+
+    if not date_text:
+        return None
+
+    text = date_text.lower().strip()
+
+    weekdays = {
+        "monday": 0,
+        "tuesday": 1,
+        "wednesday": 2,
+        "thursday": 3,
+        "friday": 4,
+        "saturday": 5,
+        "sunday": 6,
+    }
+
+    matched_index = None
+
+    for day_name, day_index in weekdays.items():
+        if day_name in text:
+            matched_index = day_index
+            break
+
+    if matched_index is None:
+        return None
+
     now = datetime.now(timezone.utc)
+    today_index = now.weekday()
 
-    if "today" in normalized_message:
-        due_date = now.replace(hour=23, minute=59, second=0, microsecond=0)
-        return due_date.isoformat()
+    days_ahead = matched_index - today_index
 
-    if "tomorrow" in normalized_message:
-        due_date = now + timedelta(days=1)
-        due_date = due_date.replace(hour=23, minute=59, second=0, microsecond=0)
-        return due_date.isoformat()
+    if "next" in text:
+        if days_ahead <= 0:
+            days_ahead += 7
+        else:
+            days_ahead += 7
+    else:
+        if days_ahead <= 0:
+            days_ahead += 7
 
-    if "next week" in normalized_message:
-        due_date = now + timedelta(days=7)
-        due_date = due_date.replace(hour=23, minute=59, second=0, microsecond=0)
-        return due_date.isoformat()
+    hour, minute = get_time_from_text(text)
 
-    return None
+    due_datetime = now + timedelta(days=days_ahead)
+    due_datetime = due_datetime.replace(
+        hour=hour,
+        minute=minute,
+        second=0,
+        microsecond=0,
+    )
 
+    print("MANUAL WEEKDAY PARSED:", date_text, "→", due_datetime.isoformat())
 
-def clean_task_title(message: str) -> str:
-    """
-    Creates a simple task title from the user message.
-    """
-
-    cleaned = message.strip()
-
-    prefixes = [
-        "remind me to ",
-        "add task to ",
-        "add todo to ",
-        "todo ",
-        "task ",
-        "reminder ",
-    ]
-
-    lowered = cleaned.lower()
-
-    for prefix in prefixes:
-        if lowered.startswith(prefix):
-            return cleaned[len(prefix):].strip().capitalize()
-
-    return cleaned.capitalize()
-
-from datetime import datetime, timezone
-import re
-import dateparser
+    return due_datetime.isoformat()
 
 
 def normalize_date_text(date_text: str) -> str:
@@ -88,16 +99,16 @@ def normalize_date_text(date_text: str) -> str:
 
     text = date_text.lower().strip()
 
-    # Remove common task words
-    text = re.sub(r"\b(remind me to|remind me|need to|add task to|task to)\b", "", text)
+    text = re.sub(
+        r"\b(remind me to|remind me|need to|add task to|task to)\b",
+        "",
+        text,
+    )
     text = re.sub(r"\b(finish|complete|submit|call|pay|do)\b", "", text)
 
-    # Extract phrase after "by", "on", or "at" if present
-    for marker in [" by ", " on ", " at "]:
-        if marker in f" {text} ":
-            text = text.split(marker.strip(), 1)[-1].strip()
+    if " by " in f" {text} ":
+        text = text.split(" by ", 1)[-1].strip()
 
-    # Convert vague time words into parseable times
     replacements = {
         "morning": "9:00 AM",
         "afternoon": "2:00 PM",
@@ -116,14 +127,6 @@ def normalize_date_text(date_text: str) -> str:
 def parse_due_date(date_text: str | None) -> str | None:
     """
     Converts natural language date text into ISO datetime string.
-
-    Examples:
-    - tomorrow morning
-    - Friday evening
-    - by Friday evening
-    - next Monday
-    - today
-    - tonight
     """
 
     if not date_text:
@@ -134,7 +137,12 @@ def parse_due_date(date_text: str | None) -> str | None:
     if normalized_text in ["null", "none", "no due date", ""]:
         return None
 
-    normalized_text = normalize_date_text(normalized_text)
+    weekday_result = parse_weekday_due_date(normalized_text)
+
+    if weekday_result:
+        return weekday_result
+
+    parsed_text = normalize_date_text(normalized_text)
 
     settings = {
         "PREFER_DATES_FROM": "future",
@@ -143,16 +151,19 @@ def parse_due_date(date_text: str | None) -> str | None:
         "TO_TIMEZONE": "UTC",
     }
 
-    parsed_date = dateparser.parse(normalized_text, settings=settings)
+    parsed_date = dateparser.parse(parsed_text, settings=settings)
 
     if not parsed_date:
-        print("DATEPARSER COULD NOT PARSE:", date_text, "→", normalized_text)
+        print("DATEPARSER COULD NOT PARSE:", date_text, "→", parsed_text)
         return None
 
     if parsed_date.tzinfo is None:
         parsed_date = parsed_date.replace(tzinfo=timezone.utc)
 
+    print("DATEPARSER PARSED:", date_text, "→", parsed_date.isoformat())
+
     return parsed_date.isoformat()
+
 
 def handle_task_message(
     message: str,
@@ -184,8 +195,6 @@ def handle_task_message(
     due_date_text = llm_task.get("due_date_text")
     reminder_text = llm_task.get("reminder_text") or due_date_text
 
-    # Important fallback:
-    # If LLM does not extract due_date_text, try parsing the original message.
     due_date = parse_due_date(due_date_text) or parse_due_date(message)
     reminder_at = parse_due_date(reminder_text) or due_date
 

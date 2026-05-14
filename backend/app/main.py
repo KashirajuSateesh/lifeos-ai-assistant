@@ -4,11 +4,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.agents.expense_agent import handle_expense_message
-from app.agents.journal_agent import handle_journal_message
-from app.agents.orchestrator import classify_intent
-from app.agents.places_agent import handle_places_message
-from app.agents.task_agent import handle_task_message
+from app.graphs.lifeos_graph import run_lifeos_graph
 
 from app.schemas import (
     ChatRequest,
@@ -157,56 +153,22 @@ def chat(
     request: ChatRequest,
     authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
-    routing_result = classify_intent(request.message)
-
-    selected_agent = routing_result["selected_agent"]
-    extracted_data = routing_result.get("extracted_data", {})
-
-    if selected_agent == "expense_agent":
-        agent_result = handle_expense_message(
-            request.message,
-            extracted_data,
-            user_id=authenticated_user_id,
-        )
-
-    elif selected_agent == "task_agent":
-        agent_result = handle_task_message(
-            request.message,
-            extracted_data,
-            user_id=authenticated_user_id,
-        )
-
-    elif selected_agent == "journal_agent":
-        agent_result = handle_journal_message(
-            request.message,
-            extracted_data,
-            user_id=authenticated_user_id,
-        )
-
-    elif selected_agent == "places_agent":
-        agent_result = handle_places_message(
-            request.message,
-            extracted_data,
-            user_id=authenticated_user_id,
-        )
-
-    else:
-        agent_result = {
-            "response": "I understood your message, but I could not route it to a specific agent yet.",
-            "extracted_data": extracted_data,
-        }
+    graph_result = run_lifeos_graph(
+        message=request.message,
+        user_id=authenticated_user_id,
+    )
 
     return ChatResponse(
         status="success",
         user_id=authenticated_user_id,
         message_received=request.message,
-        intent=routing_result["intent"],
-        selected_agent=selected_agent,
-        extracted_data=agent_result.get("extracted_data"),
-        response=agent_result["response"],
-        confidence=routing_result.get("confidence"),
-        routing_source=routing_result.get("routing_source"),
-        routing_reason=routing_result.get("routing_reason"),
+        intent=graph_result.get("intent"),
+        selected_agent=graph_result.get("selected_agent"),
+        extracted_data=graph_result.get("extracted_data"),
+        response=graph_result.get("response"),
+        confidence=graph_result.get("confidence"),
+        routing_source=graph_result.get("routing_source"),
+        routing_reason=graph_result.get("routing_reason"),
     )
 
 
