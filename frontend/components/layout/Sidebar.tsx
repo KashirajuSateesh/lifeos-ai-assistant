@@ -1,3 +1,7 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 const navItems = [
@@ -11,6 +15,12 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const router = useRouter();
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
   return (
     <aside className="hidden min-h-screen w-64 border-r border-slate-800 bg-slate-950 p-5 text-white lg:block">
       <div className="mb-8">
@@ -29,6 +39,12 @@ export default function Sidebar() {
           </Link>
         ))}
       </nav>
+      <button
+        onClick={logout}
+        className="mt-8 w-full rounded-xl border border-slate-700 px-4 py-3 text-left text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+      >
+        Logout
+      </button>
     </aside>
   );
 }
