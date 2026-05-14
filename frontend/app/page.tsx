@@ -819,11 +819,18 @@ export default function Home() {
                 {taskReminders.overdue.length > 0 ||
                 taskReminders.follow_up.length > 0 ? (
                   <div className="space-y-2">
-                    {[...taskReminders.overdue, ...taskReminders.follow_up]
+                    {Array.from(
+                      new Map(
+                        [...taskReminders.overdue, ...taskReminders.follow_up].map((task) => [
+                          task.id,
+                          task,
+                        ])
+                      ).values()
+                    )
                       .slice(0, 3)
                       .map((task) => (
                         <div
-                          key={task.id}
+                          key={`overdue-followup-${task.id}`}
                           className="rounded-lg bg-slate-900 p-3"
                         >
                           <p className="font-medium">{task.title}</p>
