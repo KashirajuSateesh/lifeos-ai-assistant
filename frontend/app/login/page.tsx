@@ -6,6 +6,24 @@ import { useRouter } from "next/navigation";
 import { saveMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
+
+function validatePassword(password: string) {
+  const checks = {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /\d/.test(password),
+    hasSymbol: /[^A-Za-z0-9]/.test(password),
+  };
+
+  const isValid = Object.values(checks).every(Boolean);
+
+  return {
+    isValid,
+    checks,
+  };
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -25,6 +43,17 @@ export default function LoginPage() {
     if (!email.trim() || !password.trim()) {
       alert("Please enter email and password.");
       return;
+    }
+
+    if (mode === "signup") {
+      const passwordValidation = validatePassword(password);
+
+      if (!passwordValidation.isValid) {
+        alert(
+          "Password must be at least 8 characters and include uppercase, lowercase, number, and symbol."
+        );
+        return;
+      }
     }
 
     if (mode === "signup" && (!firstName.trim() || !lastName.trim())) {
@@ -86,10 +115,28 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-white">
       <section className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
         <div className="mb-6">
-          <p className="text-sm font-medium text-blue-400">LifeOS</p>
-          <h1 className="text-3xl font-bold">
+          <div className="mb-4 flex items-center gap-3">
+            <img
+              src="/lifeos-logo.png"
+              alt="LifeOS Logo"
+              className="h-12 w-12 rounded-xl object-cover"
+              onError={(event) => {
+                event.currentTarget.style.display = "none";
+              }}
+            />
+
+            <div>
+              <h1 className="text-4xl font-extrabold tracking-tight text-white">
+                LifeOS
+              </h1>
+              <p className="text-sm text-blue-400">
+                Personal AI Operating System
+              </p>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold">
             {mode === "login" ? "Welcome Back" : "Create Your Account"}
-          </h1>
+          </h2>
           <p className="mt-2 text-slate-400">
             Your personal AI assistant for expenses, tasks, journals, places, and daily planning.
           </p>
@@ -154,6 +201,35 @@ export default function LoginPage() {
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
           />
 
+          {mode === "signup" && (
+            <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 text-xs">
+              <p className="mb-2 font-medium text-slate-300">Password must include:</p>
+
+              <div className="space-y-1">
+                <PasswordRule
+                  valid={validatePassword(password).checks.minLength}
+                  label="At least 8 characters"
+                />
+                <PasswordRule
+                  valid={validatePassword(password).checks.hasUppercase}
+                  label="One uppercase letter"
+                />
+                <PasswordRule
+                  valid={validatePassword(password).checks.hasLowercase}
+                  label="One lowercase letter"
+                />
+                <PasswordRule
+                  valid={validatePassword(password).checks.hasNumber}
+                  label="One number"
+                />
+                <PasswordRule
+                  valid={validatePassword(password).checks.hasSymbol}
+                  label="One symbol"
+                />
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleAuth}
             disabled={loading}
@@ -177,5 +253,18 @@ export default function LoginPage() {
         </button>
       </section>
     </main>
+  );
+}
+
+function PasswordRule({ valid, label }: { valid: boolean; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={valid ? "text-emerald-400" : "text-slate-500"}>
+        {valid ? "✓" : "○"}
+      </span>
+      <span className={valid ? "text-emerald-300" : "text-slate-400"}>
+        {label}
+      </span>
+    </div>
   );
 }
