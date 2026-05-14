@@ -20,6 +20,9 @@ from app.schemas import (
     UpdateTaskResponse,
     DeleteTaskResponse,
     TaskRemindersResponse,
+    RecentJournalsResponse,
+    MonthlyJournalsResponse,
+    DeleteJournalResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -28,7 +31,10 @@ from app.services.database import (
     get_tasks_by_user,
     update_task_by_id,
     delete_task_by_id,
-    get_task_reminders_by_user
+    get_task_reminders_by_user,
+    get_recent_journals_by_user,
+    get_journals_by_month,
+    delete_journal_by_id,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -88,7 +94,11 @@ def chat(request: ChatRequest):
     )
 
     elif selected_agent == "journal_agent":
-        agent_result = handle_journal_message(request.message, extracted_data)
+        agent_result = handle_journal_message(
+        request.message,
+        extracted_data,
+        user_id=request.user_id,
+    )
 
     elif selected_agent == "places_agent":
         agent_result = handle_places_message(request.message, extracted_data)
@@ -314,4 +324,44 @@ def get_task_reminders(user_id: str):
         upcoming=reminders["upcoming"],
         overdue=reminders["overdue"],
         follow_up=reminders["follow_up"],
+    )
+
+@app.get("/api/journals/recent/{user_id}", response_model=RecentJournalsResponse)
+def get_recent_journals(user_id: str):
+    journals = get_recent_journals_by_user(user_id, limit=5)
+
+    return RecentJournalsResponse(
+        status="success",
+        user_id=user_id,
+        count=len(journals),
+        journals=journals,
+    )
+
+
+@app.get("/api/journals/{user_id}", response_model=MonthlyJournalsResponse)
+def get_monthly_journals(user_id: str, year: int, month: int):
+    journals = get_journals_by_month(
+        user_id=user_id,
+        year=year,
+        month=month,
+    )
+
+    return MonthlyJournalsResponse(
+        status="success",
+        user_id=user_id,
+        year=year,
+        month=month,
+        count=len(journals),
+        journals=journals,
+    )
+
+
+@app.delete("/api/journals/{journal_id}", response_model=DeleteJournalResponse)
+def delete_journal(journal_id: str):
+    deleted_journal = delete_journal_by_id(journal_id)
+
+    return DeleteJournalResponse(
+        status="success",
+        deleted_journal=deleted_journal,
+        message="Journal entry deleted successfully",
     )

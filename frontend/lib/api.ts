@@ -6,6 +6,8 @@ import {
   TasksResponse,
   TaskPriorityFilter,
   TaskRemindersResponse,
+  RecentJournalsResponse,
+  MonthlyJournalsResponse,
 } from "./types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -165,6 +167,47 @@ export async function deleteTask(taskId: string) {
 
   if (!response.ok) {
     throw new Error("Failed to delete task");
+  }
+
+  return response.json();
+}
+
+// Journal Agent related API functions
+
+export async function getRecentJournals(): Promise<RecentJournalsResponse> {
+  const response = await fetch(
+    `${getBackendUrl()}/api/journals/recent/${DEMO_USER_ID}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch recent journals");
+  }
+
+  return response.json();
+}
+
+export async function getMonthlyJournals(
+  year: number,
+  month: number
+): Promise<MonthlyJournalsResponse> {
+  const response = await fetch(
+    `${getBackendUrl()}/api/journals/${DEMO_USER_ID}?year=${year}&month=${month}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch monthly journals");
+  }
+
+  return response.json();
+}
+
+export async function deleteJournal(journalId: string) {
+  const response = await fetch(`${getBackendUrl()}/api/journals/${journalId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete journal");
   }
 
   return response.json();

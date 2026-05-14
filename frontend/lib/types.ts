@@ -15,6 +15,13 @@ export type ExtractedData = {
   due_date?: string | null;
   reminder_at?: string | null;
 
+    // Journal fields
+  entry_text?: string;
+  mood?: string | null;
+  tags?: string[] | null;
+  summary?: string | null;
+  entry_date?: string;
+
   // Common fields
   created_at?: string;
 };
@@ -51,6 +58,8 @@ export type ExpensesResponse = {
   end_date?: string | null;
   expenses: ExpenseItem[];
 };
+
+// Task Agent related types
 
 export type TaskItem = {
   id: string;
@@ -102,3 +111,32 @@ export type ExpenseCategoryFilter =
   | "other";
 
 export type TaskPriorityFilter = "all" | "low" | "medium" | "high";
+
+// Journal Agent related types
+
+export type JournalItem = {
+  id: string;
+  user_id: string;
+  entry_text: string;
+  mood?: string | null;
+  tags?: string[] | null;
+  summary?: string | null;
+  entry_date: string;
+  created_at: string;
+};
+
+export type RecentJournalsResponse = {
+  status: string;
+  user_id: string;
+  count: number;
+  journals: JournalItem[];
+};
+
+export type MonthlyJournalsResponse = {
+  status: string;
+  user_id: string;
+  year: number;
+  month: number;
+  count: number;
+  journals: JournalItem[];
+};

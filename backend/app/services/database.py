@@ -249,3 +249,89 @@ def get_task_reminders_by_user(user_id: str) -> Dict[str, Any]:
         "overdue": overdue,
         "follow_up": follow_up,
     }
+
+# Journal Agent Code 
+
+def save_journal_entry(journal_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Saves one journal entry into the journal_entries table.
+    """
+
+    supabase = get_supabase_client()
+
+    result = supabase.table("journal_entries").insert(journal_data).execute()
+
+    if not result.data:
+        raise RuntimeError("Failed to save journal entry to Supabase")
+
+    return result.data[0]
+
+
+def get_recent_journals_by_user(user_id: str, limit: int = 5) -> list[Dict[str, Any]]:
+    """
+    Fetches recent journal entries for a specific user.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("journal_entries")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("entry_date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    return result.data or []
+
+
+def get_journals_by_month(
+    user_id: str,
+    year: int,
+    month: int,
+) -> list[Dict[str, Any]]:
+    """
+    Fetches journal entries for a specific user, year, and month.
+    """
+
+    from datetime import date
+    import calendar
+
+    supabase = get_supabase_client()
+
+    start_date = date(year, month, 1)
+    last_day = calendar.monthrange(year, month)[1]
+    end_date = date(year, month, last_day)
+
+    result = (
+        supabase.table("journal_entries")
+        .select("*")
+        .eq("user_id", user_id)
+        .gte("entry_date", start_date.isoformat())
+        .lte("entry_date", end_date.isoformat())
+        .order("entry_date", desc=False)
+        .execute()
+    )
+
+    return result.data or []
+
+
+def delete_journal_by_id(journal_id: str) -> Dict[str, Any]:
+    """
+    Deletes one journal entry by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("journal_entries")
+        .delete()
+        .eq("id", journal_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to delete journal entry or journal not found")
+
+    return result.data[0]

@@ -111,3 +111,38 @@ class TaskRemindersResponse(BaseModel):
     upcoming: List[TaskItem]
     overdue: List[TaskItem]
     follow_up: List[TaskItem]
+
+
+# Journal Agent Schemas
+
+class JournalItem(BaseModel):
+    id: str
+    user_id: str
+    entry_text: str
+    mood: Optional[str] = None
+    tags: Optional[List[str]] = None
+    summary: Optional[str] = None
+    entry_date: str
+    created_at: str
+
+
+class RecentJournalsResponse(BaseModel):
+    status: str
+    user_id: str
+    count: int
+    journals: List[JournalItem]
+
+
+class MonthlyJournalsResponse(BaseModel):
+    status: str
+    user_id: str
+    year: int
+    month: int
+    count: int
+    journals: List[JournalItem]
+
+
+class DeleteJournalResponse(BaseModel):
+    status: str
+    deleted_journal: Dict[str, Any]
+    message: str
