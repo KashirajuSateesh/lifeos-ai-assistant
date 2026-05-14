@@ -8,6 +8,7 @@ import {
   getNearbyPlaces,
   getPlaces,
   getPlacesWithDistances,
+  getPlaceSuggestions,
   updatePlace,
 } from "@/lib/api";
 
@@ -17,6 +18,7 @@ import {
   PlaceItem,
   PlacesResponse,
   PlaceStatusFilter,
+  PlaceSuggestionsResponse,
 } from "@/lib/types";
 
 const statusOptions: { label: string; value: PlaceStatusFilter }[] = [
@@ -60,6 +62,9 @@ export default function PlacesPage() {
   );
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyRadiusKm, setNearbyRadiusKm] = useState(10);
+  const [placeSuggestions, setPlaceSuggestions] =
+    useState<PlaceSuggestionsResponse | null>(null);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   async function fetchPlaces(
     status: PlaceStatusFilter = selectedStatus,
@@ -235,8 +240,23 @@ export default function PlacesPage() {
     }
   }
 
+  async function fetchPlaceSuggestions() {
+    setSuggestionsLoading(true);
+
+    try {
+      const data = await getPlaceSuggestions(0);
+      setPlaceSuggestions(data);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to fetch place suggestions.");
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
   useEffect(() => {
     fetchPlaces("all", "all");
+    fetchPlaceSuggestions();
   }, []);
 
   return (
@@ -421,6 +441,92 @@ export default function PlacesPage() {
             </div>
           )}
         </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+          <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-medium text-blue-400">Suggestions</p>
+              <h2 className="text-2xl font-bold">Places You Saved Earlier</h2>
+              <p className="mt-2 text-slate-400">
+                Places you saved but have not visited yet.
+              </p>
+            </div>
+
+            <button
+              onClick={fetchPlaceSuggestions}
+              disabled={suggestionsLoading}
+              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-60"
+            >
+              {suggestionsLoading ? "Checking..." : "Refresh Suggestions"}
+            </button>
+          </div>
+
+          {suggestionsLoading ? (
+            <p className="text-slate-400">Loading suggestions...</p>
+          ) : placeSuggestions && placeSuggestions.places.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {placeSuggestions.places.slice(0, 4).map((place) => (
+                <div
+                  key={`suggestion-${place.id}`}
+                  className="rounded-xl border border-orange-500/40 bg-slate-800 p-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold">{place.place_name}</p>
+                      <p className="mt-1 text-sm capitalize text-slate-400">
+                        {place.category ?? "general"} · {place.status.replace("_", " ")}
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-orange-600 px-3 py-1 text-xs">
+                      Saved
+                    </span>
+                  </div>
+
+                  <p className="mt-3 text-sm text-slate-300">
+                    You saved this place earlier. Still want to visit or try it?
+                  </p>
+
+                  {place.image_url && (
+                    <img
+                      src={place.image_url}
+                      alt={place.place_name}
+                      className="mt-4 h-36 w-full rounded-xl object-cover"
+                    />
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {!place.visited && (
+                      <button
+                        onClick={() => markVisited(place)}
+                        className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                      >
+                        Mark Visited
+                      </button>
+                    )}
+
+                    {place.source_url && (
+                      <a
+                        href={place.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700"
+                      >
+                        Open Link
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-400">
+              No saved-place suggestions right now.
+            </p>
+          )}
+        </section>
+
+
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex items-center justify-between">

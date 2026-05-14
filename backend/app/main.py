@@ -29,6 +29,7 @@ from app.schemas import (
     DeletePlaceResponse,
     NearbyPlacesResponse,
     PlacesWithDistancesResponse,
+    PlaceSuggestionsResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -46,6 +47,8 @@ from app.services.database import (
     delete_place_by_id,
     get_nearby_places_by_user,
     get_places_with_distances_by_user,
+    get_place_suggestions_by_user,
+    update_place_last_suggested,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -484,4 +487,24 @@ def get_places_with_distances(
         longitude=longitude,
         count=len(places),
         places=places,
+    )
+
+@app.get("/api/places/suggestions/{user_id}", response_model=PlaceSuggestionsResponse)
+def get_place_suggestions(
+    user_id: str,
+    older_than_days: int = 7,
+):
+    suggestions = get_place_suggestions_by_user(
+        user_id=user_id,
+        older_than_days=older_than_days,
+    )
+
+    for place in suggestions:
+        update_place_last_suggested(place["id"])
+
+    return PlaceSuggestionsResponse(
+        status="success",
+        user_id=user_id,
+        count=len(suggestions),
+        places=suggestions,
     )

@@ -543,3 +543,57 @@ def get_places_with_distances_by_user(
         place["distance_status"] = "calculated"
 
     return places
+
+def get_place_suggestions_by_user(
+    user_id: str,
+    older_than_days: int = 7,
+) -> list[Dict[str, Any]]:
+    """
+    Finds saved places that are not visited yet and should be suggested again.
+
+    A place is suggested when:
+    - visited is false
+    - reminder_enabled is true
+    - created_at is older than older_than_days
+    """
+
+    from datetime import datetime, timedelta, timezone
+
+    supabase = get_supabase_client()
+
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+
+    result = (
+        supabase.table("places")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("visited", False)
+        .eq("reminder_enabled", True)
+        .lte("created_at", cutoff_date.isoformat())
+        .order("created_at", desc=False)
+        .execute()
+    )
+
+    return result.data or []
+
+
+def update_place_last_suggested(place_id: str) -> Dict[str, Any]:
+    """
+    Updates last_suggested_at when we show a place suggestion.
+    """
+
+    from datetime import datetime, timezone
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("places")
+        .update({"last_suggested_at": datetime.now(timezone.utc).isoformat()})
+        .eq("id", place_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to update place suggestion timestamp")
+
+    return result.data[0]

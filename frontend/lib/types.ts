@@ -227,3 +227,10 @@ export type PlacesWithDistancesResponse = {
   count: number;
   places: PlaceItem[];
 };
+
+export type PlaceSuggestionsResponse = {
+  status: string;
+  user_id: string;
+  count: number;
+  places: PlaceItem[];
+};

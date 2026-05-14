@@ -230,3 +230,9 @@ class PlacesWithDistancesResponse(BaseModel):
     longitude: float
     count: int
     places: List[Dict[str, Any]]
+
+class PlaceSuggestionsResponse(BaseModel):
+    status: str
+    user_id: str
+    count: int
+    places: List[Dict[str, Any]]

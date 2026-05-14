@@ -13,6 +13,7 @@ import {
   PlaceCategoryFilter,
   NearbyPlacesResponse,
   PlacesWithDistancesResponse,
+  PlaceSuggestionsResponse,
 } from "./types";
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -314,6 +315,23 @@ export async function getPlacesWithDistances(params: {
 
   if (!response.ok) {
     throw new Error("Failed to fetch places with distances");
+  }
+
+  return response.json();
+}
+
+export async function getPlaceSuggestions(
+  olderThanDays = 7
+): Promise<PlaceSuggestionsResponse> {
+  const queryParams = new URLSearchParams();
+  queryParams.set("older_than_days", String(olderThanDays));
+
+  const response = await fetch(
+    `${getBackendUrl()}/api/places/suggestions/${DEMO_USER_ID}?${queryParams.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch place suggestions");
   }
 
   return response.json();
