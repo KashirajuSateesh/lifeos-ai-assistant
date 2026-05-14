@@ -9,7 +9,7 @@ from app.services.place_enrichment import (
     geocode_place,
     search_pexels_photo,
 )
-
+from app.services.llm import extract_place_with_llm
 
 def detect_place_status(message: str) -> str:
     normalized_message = message.lower()
@@ -225,13 +225,37 @@ def handle_places_message(
     coordinate_text = expanded_url or message
     latitude, longitude = extract_coordinates_from_text(coordinate_text)
 
-    place_name = clean_place_name(message)
-    category = detect_place_category(message)
-    tags = detect_environment_tags(message)
-    status = detect_place_status(message)
-    city = detect_city(message)
+    try:
+        llm_place = extract_place_with_llm(message)
 
-    geocode_query = clean_place_name(message)
+        print("LLM PLACE EXTRACTION RESULT:")
+        print(llm_place)
+
+    except Exception as error:
+        print("LLM PLACE EXTRACTION ERROR:")
+        print(error)
+
+        llm_place = {
+            "place_name": clean_place_name(message),
+            "description": message.strip(),
+            "category": detect_place_category(message),
+            "environment_tags": detect_environment_tags(message),
+            "status": detect_place_status(message),
+            "city": detect_city(message),
+            "location_query": clean_place_name(message),
+            "source_url": source_url,
+            "confidence": 0.0,
+        }
+
+    place_name = llm_place.get("place_name") or clean_place_name(message)
+    description = llm_place.get("description") or message.strip()
+    category = llm_place.get("category") or detect_place_category(message)
+    tags = llm_place.get("environment_tags") or detect_environment_tags(message)
+    status = llm_place.get("status") or detect_place_status(message)
+    city = llm_place.get("city") or detect_city(message)
+    source_url = expanded_url or llm_place.get("source_url") or source_url
+
+    geocode_query = llm_place.get("location_query") or place_name
 
     if city and city.lower() not in geocode_query.lower():
         geocode_query = f"{geocode_query}, {city}"

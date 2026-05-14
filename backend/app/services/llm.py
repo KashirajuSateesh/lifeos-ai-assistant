@@ -463,3 +463,135 @@ def validate_journal_extraction(data: Dict[str, Any]) -> Dict[str, Any]:
         "summary": summary,
         "confidence": confidence,
     }
+
+
+# LLM Places Extractor
+
+def extract_place_with_llm(message: str) -> Dict[str, Any]:
+    """
+    Uses OpenAI to extract structured place data.
+    """
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is missing")
+
+    system_prompt = """
+You are a Places Extraction Agent.
+
+Extract structured place/location data from the user's message.
+
+Return only valid JSON. Do not include markdown.
+
+Fields:
+{
+  "place_name": "specific place name or short readable title",
+  "description": "clean description of the place or user note",
+  "category": "ocean | mountain | desert | adventure | restaurant | movie | park | city | shopping | travel | residential | general",
+  "environment_tags": ["tag1", "tag2"],
+  "status": "want_to_visit | favorite",
+  "city": "city name or null",
+  "location_query": "best text to use for geocoding or null",
+  "source_url": "url if user pasted one or null",
+  "confidence": 0.0
+}
+
+Rules:
+- If user says liked, loved, favorite, good place, best place → status should be favorite.
+- If user says want to visit, want to go, save for later, try someday → status should be want_to_visit.
+- If user provides a street/address/city/state, put the full location in location_query.
+- If user provides Google Maps or any map link, put it in source_url.
+- If exact place name is unclear but user describes a type of place, create a readable place_name from the description.
+- environment_tags should be lowercase and concise.
+- Do not include more than 5 tags.
+"""
+
+    user_prompt = f"""
+Extract place data from this message:
+
+{message}
+"""
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        temperature=0,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": system_prompt.strip()},
+            {"role": "user", "content": user_prompt.strip()},
+        ],
+    )
+
+    content = response.choices[0].message.content
+
+    if not content:
+        raise RuntimeError("OpenAI returned empty place extraction response")
+
+    parsed = json.loads(content)
+
+    return validate_place_extraction(parsed)
+
+
+def validate_place_extraction(data: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_categories = {
+        "ocean",
+        "mountain",
+        "desert",
+        "adventure",
+        "restaurant",
+        "movie",
+        "park",
+        "city",
+        "shopping",
+        "travel",
+        "residential",
+        "general",
+    }
+
+    allowed_statuses = {"want_to_visit", "favorite"}
+
+    place_name = data.get("place_name") or "Saved place"
+    description = data.get("description") or place_name
+
+    category = data.get("category", "general")
+    if category not in allowed_categories:
+        category = "general"
+
+    status = data.get("status", "want_to_visit")
+    if status not in allowed_statuses:
+        status = "want_to_visit"
+
+    tags = data.get("environment_tags") or []
+
+    if not isinstance(tags, list):
+        tags = ["general"]
+
+    cleaned_tags = []
+
+    for tag in tags:
+        if isinstance(tag, str):
+            cleaned = tag.strip().lower().replace(" ", "_")
+            if cleaned:
+                cleaned_tags.append(cleaned)
+
+    cleaned_tags = cleaned_tags[:5] or ["general"]
+
+    confidence = data.get("confidence", 0.0)
+
+    try:
+        confidence = float(confidence)
+    except Exception:
+        confidence = 0.0
+
+    confidence = max(0.0, min(1.0, confidence))
+
+    return {
+        "place_name": str(place_name).strip(),
+        "description": str(description).strip(),
+        "category": category,
+        "environment_tags": cleaned_tags,
+        "status": status,
+        "city": data.get("city"),
+        "location_query": data.get("location_query"),
+        "source_url": data.get("source_url"),
+        "confidence": confidence,
+    }
