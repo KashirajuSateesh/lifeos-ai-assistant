@@ -335,3 +335,89 @@ def delete_journal_by_id(journal_id: str) -> Dict[str, Any]:
         raise RuntimeError("Failed to delete journal entry or journal not found")
 
     return result.data[0]
+
+
+# Places Agent Database Code
+
+def save_place(place_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Saves one place record into the places table.
+    """
+
+    supabase = get_supabase_client()
+
+    result = supabase.table("places").insert(place_data).execute()
+
+    if not result.data:
+        raise RuntimeError("Failed to save place to Supabase")
+
+    return result.data[0]
+
+
+def get_places_by_user(
+    user_id: str,
+    status: str | None = None,
+    category: str | None = None,
+) -> list[Dict[str, Any]]:
+    """
+    Fetches places for a specific user.
+    Supports optional status/category filtering.
+    """
+
+    supabase = get_supabase_client()
+
+    query = (
+        supabase.table("places")
+        .select("*")
+        .eq("user_id", user_id)
+    )
+
+    if status and status != "all":
+        query = query.eq("status", status)
+
+    if category and category != "all":
+        query = query.eq("category", category)
+
+    result = query.order("created_at", desc=True).execute()
+
+    return result.data or []
+
+
+def update_place_by_id(place_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Updates one place by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("places")
+        .update(update_data)
+        .eq("id", place_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to update place or place not found")
+
+    return result.data[0]
+
+
+def delete_place_by_id(place_id: str) -> Dict[str, Any]:
+    """
+    Deletes one place by ID.
+    """
+
+    supabase = get_supabase_client()
+
+    result = (
+        supabase.table("places")
+        .delete()
+        .eq("id", place_id)
+        .execute()
+    )
+
+    if not result.data:
+        raise RuntimeError("Failed to delete place or place not found")
+
+    return result.data[0]

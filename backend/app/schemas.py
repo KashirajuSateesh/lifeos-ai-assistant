@@ -146,3 +146,70 @@ class DeleteJournalResponse(BaseModel):
     status: str
     deleted_journal: Dict[str, Any]
     message: str
+
+# Places Agent Schemas
+
+class PlaceItem(BaseModel):
+    id: str
+    user_id: str
+    place_name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    environment_tags: Optional[List[str]] = None
+    status: str
+    city: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    source_url: Optional[str] = None
+    image_url: Optional[str] = None
+    image_source: Optional[str] = None
+    photo_credit: Optional[str] = None
+    location_known: bool = False
+    visited: bool = False
+    visited_at: Optional[str] = None
+    reminder_enabled: bool = True
+    last_suggested_at: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+
+
+class PlacesResponse(BaseModel):
+    status: str
+    user_id: str
+    count: int
+    places: List[PlaceItem]
+
+
+class UpdatePlaceRequest(BaseModel):
+    place_name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    environment_tags: Optional[List[str]] = None
+    status: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    source_url: Optional[str] = None
+    image_url: Optional[str] = None
+    image_source: Optional[str] = None
+    photo_credit: Optional[str] = None
+    location_known: Optional[bool] = None
+    visited: Optional[bool] = None
+    visited_at: Optional[str] = None
+    reminder_enabled: Optional[bool] = None
+    last_suggested_at: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class UpdatePlaceResponse(BaseModel):
+    status: str
+    updated_place: Dict[str, Any]
+    message: str
+
+
+class DeletePlaceResponse(BaseModel):
+    status: str
+    deleted_place: Dict[str, Any]
+    message: str

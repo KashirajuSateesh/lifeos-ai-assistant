@@ -23,6 +23,10 @@ from app.schemas import (
     RecentJournalsResponse,
     MonthlyJournalsResponse,
     DeleteJournalResponse,
+    PlacesResponse,
+    UpdatePlaceRequest,
+    UpdatePlaceResponse,
+    DeletePlaceResponse,
 )
 from app.services.database import (
     get_expenses_by_user,
@@ -35,6 +39,9 @@ from app.services.database import (
     get_recent_journals_by_user,
     get_journals_by_month,
     delete_journal_by_id,
+    get_places_by_user,
+    update_place_by_id,
+    delete_place_by_id,
 )
 
 from datetime import datetime, timedelta, timezone
@@ -101,7 +108,11 @@ def chat(request: ChatRequest):
     )
 
     elif selected_agent == "places_agent":
-        agent_result = handle_places_message(request.message, extracted_data)
+        agent_result = handle_places_message(
+        request.message,
+        extracted_data,
+        user_id=request.user_id,
+    )
 
     else:
         agent_result = {
@@ -364,4 +375,62 @@ def delete_journal(journal_id: str):
         status="success",
         deleted_journal=deleted_journal,
         message="Journal entry deleted successfully",
+    )
+
+# Places Agent Endpoints
+
+@app.get("/api/places/{user_id}", response_model=PlacesResponse)
+def get_places(
+    user_id: str,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+):
+    places = get_places_by_user(
+        user_id=user_id,
+        status=status,
+        category=category,
+    )
+
+    return PlacesResponse(
+        status="success",
+        user_id=user_id,
+        count=len(places),
+        places=places,
+    )
+
+
+@app.patch("/api/places/{place_id}", response_model=UpdatePlaceResponse)
+def update_place(place_id: str, request: UpdatePlaceRequest):
+    update_data = request.model_dump(exclude_none=True)
+
+    if "status" in update_data:
+        if update_data["status"] not in ["want_to_visit", "favorite"]:
+            raise HTTPException(
+                status_code=400,
+                detail="status must be either want_to_visit or favorite",
+            )
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="No update fields provided",
+        )
+
+    updated_place = update_place_by_id(place_id, update_data)
+
+    return UpdatePlaceResponse(
+        status="success",
+        updated_place=updated_place,
+        message="Place updated successfully",
+    )
+
+
+@app.delete("/api/places/{place_id}", response_model=DeletePlaceResponse)
+def delete_place(place_id: str):
+    deleted_place = delete_place_by_id(place_id)
+
+    return DeletePlaceResponse(
+        status="success",
+        deleted_place=deleted_place,
+        message="Place deleted successfully",
     )
