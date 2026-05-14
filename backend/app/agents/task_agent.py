@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
+import dateparser, re
 from typing import Dict, Any, Optional
 
 from app.services.database import save_task
+from app.services.llm import extract_task_with_llm
 
 
 def detect_priority(message: str) -> str:
@@ -74,6 +76,83 @@ def clean_task_title(message: str) -> str:
 
     return cleaned.capitalize()
 
+from datetime import datetime, timezone
+import re
+import dateparser
+
+
+def normalize_date_text(date_text: str) -> str:
+    """
+    Makes natural language dates easier for dateparser.
+    """
+
+    text = date_text.lower().strip()
+
+    # Remove common task words
+    text = re.sub(r"\b(remind me to|remind me|need to|add task to|task to)\b", "", text)
+    text = re.sub(r"\b(finish|complete|submit|call|pay|do)\b", "", text)
+
+    # Extract phrase after "by", "on", or "at" if present
+    for marker in [" by ", " on ", " at "]:
+        if marker in f" {text} ":
+            text = text.split(marker.strip(), 1)[-1].strip()
+
+    # Convert vague time words into parseable times
+    replacements = {
+        "morning": "9:00 AM",
+        "afternoon": "2:00 PM",
+        "evening": "6:00 PM",
+        "night": "8:00 PM",
+        "tonight": "today 8:00 PM",
+    }
+
+    for word, replacement in replacements.items():
+        if word in text:
+            text = text.replace(word, replacement)
+
+    return text.strip()
+
+
+def parse_due_date(date_text: str | None) -> str | None:
+    """
+    Converts natural language date text into ISO datetime string.
+
+    Examples:
+    - tomorrow morning
+    - Friday evening
+    - by Friday evening
+    - next Monday
+    - today
+    - tonight
+    """
+
+    if not date_text:
+        return None
+
+    normalized_text = date_text.strip().lower()
+
+    if normalized_text in ["null", "none", "no due date", ""]:
+        return None
+
+    normalized_text = normalize_date_text(normalized_text)
+
+    settings = {
+        "PREFER_DATES_FROM": "future",
+        "RETURN_AS_TIMEZONE_AWARE": True,
+        "TIMEZONE": "UTC",
+        "TO_TIMEZONE": "UTC",
+    }
+
+    parsed_date = dateparser.parse(normalized_text, settings=settings)
+
+    if not parsed_date:
+        print("DATEPARSER COULD NOT PARSE:", date_text, "→", normalized_text)
+        return None
+
+    if parsed_date.tzinfo is None:
+        parsed_date = parsed_date.replace(tzinfo=timezone.utc)
+
+    return parsed_date.isoformat()
 
 def handle_task_message(
     message: str,
@@ -81,27 +160,43 @@ def handle_task_message(
     user_id: str = "demo-user",
 ) -> Dict[str, Any]:
     """
-    Task Agent - version 2.
+    Task Agent.
 
-    Responsibility:
-    - Extract task title
-    - Detect due date
-    - Detect priority
-    - Save task to Supabase
+    Uses LLM extraction first, then converts due_date_text into due/reminder dates.
     """
 
-    title = clean_task_title(message)
-    priority = detect_priority(message)
-    due_date = extract_due_date(message)
+    try:
+        llm_task = extract_task_with_llm(message)
+
+        print("LLM TASK EXTRACTION RESULT:")
+        print(llm_task)
+
+    except Exception as error:
+        print("LLM TASK EXTRACTION ERROR:")
+        print(error)
+        llm_task = {}
+
+    title = llm_task.get("title") or "Untitled task"
+    description = llm_task.get("description") or message
+    priority = llm_task.get("priority") or "medium"
+    status = llm_task.get("status") or "pending"
+
+    due_date_text = llm_task.get("due_date_text")
+    reminder_text = llm_task.get("reminder_text") or due_date_text
+
+    # Important fallback:
+    # If LLM does not extract due_date_text, try parsing the original message.
+    due_date = parse_due_date(due_date_text) or parse_due_date(message)
+    reminder_at = parse_due_date(reminder_text) or due_date
 
     task_record = {
         "user_id": user_id,
         "title": title,
-        "description": message.strip(),
-        "status": "pending",
+        "description": description,
         "priority": priority,
+        "status": status,
         "due_date": due_date,
-        "reminder_at": due_date,
+        "reminder_at": reminder_at,
     }
 
     saved_task = save_task(task_record)
@@ -110,6 +205,8 @@ def handle_task_message(
 
     if due_date:
         response += " I also detected a due date."
+    else:
+        response += " No due date was detected."
 
     return {
         "response": response,
