@@ -1,10 +1,21 @@
 export type ExtractedData = {
   id?: string;
   user_id?: string;
+
+  // Expense fields
   amount?: number | null;
   category?: string;
   description?: string;
   transaction_type?: string;
+
+  // Task fields
+  title?: string;
+  status?: string;
+  priority?: string;
+  due_date?: string | null;
+  reminder_at?: string | null;
+
+  // Common fields
   created_at?: string;
 };
 
