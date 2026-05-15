@@ -29,3 +29,66 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.8);
   cursor: pointer;
 }
+
+/* Dark blended scrollbar for LifeOS */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 65, 85, 0.75) rgba(15, 23, 42, 0.35);
+}
+
+/* Chrome, Edge, Safari */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(51, 65, 85, 0.9),
+    rgba(30, 41, 59, 0.9)
+  );
+  border-radius: 999px;
+  border: 2px solid rgba(15, 23, 42, 0.65);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(71, 85, 105, 0.95),
+    rgba(51, 65, 85, 0.95)
+  );
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.lifeos-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.35) rgba(15, 23, 42, 0.25);
+}
+
+.lifeos-scrollbar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.lifeos-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.25);
+  border-radius: 999px;
+}
+
+.lifeos-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.28);
+  border-radius: 999px;
+  border: 2px solid rgba(15, 23, 42, 0.6);
+}
+
+.lifeos-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.45);
+}

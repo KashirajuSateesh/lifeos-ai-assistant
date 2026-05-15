@@ -31,7 +31,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-slate-800 bg-slate-900 p-5 md:flex md:flex-col">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-slate-800/70 bg-slate-950/95 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl md:flex md:flex-col">
       <div className="mb-8">
         <div className="flex items-center gap-3">
           <img
@@ -55,7 +55,7 @@ export default function Sidebar() {
 
       </div>
 
-      <nav className="mt-6 flex-1 space-y-2 overflow-y-auto">
+      <nav className="lifeos-scrollbar mt-6 flex-1 space-y-2 overflow-y-auto pr-1">
         {navItems.map((item) => (
           <Link
             key={item.href}
