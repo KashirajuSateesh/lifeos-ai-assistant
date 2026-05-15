@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { saveMyProfile } from "@/lib/api";
+import { getMyProfile, saveMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 
@@ -27,6 +27,11 @@ function validatePassword(password: string) {
 export default function LoginPage() {
   const router = useRouter();
 
+  const [notice, setNotice] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
   const [mode, setMode] = useState<"login" | "signup">("login");
 
   const [email, setEmail] = useState("");
@@ -40,8 +45,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   async function handleAuth() {
+    setNotice(null);
+
     if (!email.trim() || !password.trim()) {
-      alert("Please enter email and password.");
+      setNotice({
+        type: "error",
+        message: "Please enter email and password.",
+      });
+      return;
+    }
+
+    if (mode === "signup" && (!firstName.trim() || !lastName.trim())) {
+      setNotice({
+        type: "error",
+        message: "Please enter first name and last name.",
+      });
       return;
     }
 
@@ -49,16 +67,13 @@ export default function LoginPage() {
       const passwordValidation = validatePassword(password);
 
       if (!passwordValidation.isValid) {
-        alert(
-          "Password must be at least 8 characters and include uppercase, lowercase, number, and symbol."
-        );
+        setNotice({
+          type: "error",
+          message:
+            "Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.",
+        });
         return;
       }
-    }
-
-    if (mode === "signup" && (!firstName.trim() || !lastName.trim())) {
-      alert("Please enter first name and last name.");
-      return;
     }
 
     setLoading(true);
@@ -68,44 +83,74 @@ export default function LoginPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              first_name: firstName,
+              last_name: lastName,
+              phone_number: phoneNumber,
+              birthdate,
+            },
+          },
         });
 
         if (error) {
           throw error;
         }
 
-        const { error: loginError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        setNotice({
+          type: "success",
+          message:
+            "If this email is new, we sent a confirmation link. If you already signed up, check your inbox or login after confirming your email.",
         });
 
-        if (loginError) {
-          throw loginError;
-        }
+        setMode("login");
+        setPassword("");
 
-        await saveMyProfile({
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phoneNumber,
-          birthdate,
-        });
-
-        router.push("/");
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        router.push("/");
+        return;
       }
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes("email not confirmed")) {
+          setNotice({
+            type: "error",
+            message:
+              "Your email is not confirmed yet. Please check your inbox and confirm your account before logging in.",
+          });
+          return;
+        }
+
+        throw error;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const profileResponse = await getMyProfile();
+
+      if (!profileResponse.profile && user?.user_metadata) {
+        await saveMyProfile({
+          first_name: user.user_metadata.first_name ?? "",
+          last_name: user.user_metadata.last_name ?? "",
+          phone_number: user.user_metadata.phone_number ?? "",
+          birthdate: user.user_metadata.birthdate ?? "",
+        });
+      }
+
+      router.push("/");
     } catch (error) {
       console.error(error);
-      alert("Authentication failed. Please check your details.");
+
+      setNotice({
+        type: "error",
+        message:
+          "Authentication failed. Please check your details and try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -119,14 +164,14 @@ export default function LoginPage() {
             <img
               src="/lifeos-logo.png"
               alt="LifeOS Logo"
-              className="h-12 w-12 rounded-xl object-cover"
+              className="h-24 w-24 rounded-xl object-cover"
               onError={(event) => {
                 event.currentTarget.style.display = "none";
               }}
             />
 
             <div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-white">
+              <h1 className="text-5xl font-extrabold tracking-tight text-white">
                 LifeOS
               </h1>
               <p className="text-sm text-blue-400">
@@ -141,6 +186,20 @@ export default function LoginPage() {
             Your personal AI assistant for expenses, tasks, journals, places, and daily planning.
           </p>
         </div>
+
+        {notice && (
+          <div
+            className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+              notice.type === "success"
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                : notice.type === "error"
+                ? "border-red-500/40 bg-red-500/10 text-red-300"
+                : "border-blue-500/40 bg-blue-500/10 text-blue-300"
+            }`}
+          >
+            {notice.message}
+          </div>
+        )}
 
         <div className="space-y-3">
           {mode === "signup" && (

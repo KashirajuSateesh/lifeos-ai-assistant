@@ -45,14 +45,14 @@ export default function Sidebar() {
           <img
             src="/lifeos-logo.png"
             alt="LifeOS Logo"
-            className="h-11 w-11 rounded-xl object-cover"
+            className="h-40 w-20 rounded-xl object-cover"
             onError={(event) => {
               event.currentTarget.style.display = "none";
             }}
           />
 
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">LifeOS</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">LifeOS</h1>
             <p className="text-xs text-blue-400">Personal AI Assistant</p>
           </div>
         </div>
