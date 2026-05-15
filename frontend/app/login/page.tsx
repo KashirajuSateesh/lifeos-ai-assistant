@@ -27,7 +27,7 @@ function validatePassword(password: string) {
 export default function LoginPage() {
   const router = useRouter();
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
 
   const [notice, setNotice] = useState<{
     type: NoticeType;
@@ -47,6 +47,7 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const confirmed = params.get("confirmed");
+    const reset = params.get("reset");
 
     if (confirmed === "true") {
       setNotice({
@@ -56,10 +57,68 @@ export default function LoginPage() {
 
       window.history.replaceState({}, "", "/login");
     }
+
+    if (reset === "success") {
+      setNotice({
+        type: "success",
+        message: "Password updated successfully. You can now login.",
+      });
+
+      window.history.replaceState({}, "", "/login");
+    }
   }, []);
+
+  async function handleForgotPassword() {
+    setNotice(null);
+
+    if (!email.trim()) {
+      setNotice({
+        type: "error",
+        message: "Please enter your email address.",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setNotice({
+        type: "success",
+        message:
+          "If this email exists, we sent a password reset link. Please check your inbox.",
+      });
+    } catch (error) {
+      console.error(error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to send password reset email.";
+
+      setNotice({
+        type: "error",
+        message: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleAuth() {
     setNotice(null);
+
+    if (mode === "forgot") {
+      await handleForgotPassword();
+      return;
+    }
 
     if (!email.trim() || !password.trim()) {
       setNotice({
@@ -193,9 +252,9 @@ export default function LoginPage() {
     }
   }
 
-  function switchMode() {
+  function switchMode(nextMode: "login" | "signup" | "forgot") {
     setNotice(null);
-    setMode(mode === "login" ? "signup" : "login");
+    setMode(nextMode);
     setPassword("");
   }
 
@@ -223,12 +282,17 @@ export default function LoginPage() {
           </p>
 
           <h2 className="mt-6 text-2xl font-bold">
-            {mode === "login" ? "Welcome Back" : "Create Your Account"}
+            {mode === "login"
+              ? "Welcome Back"
+              : mode === "signup"
+              ? "Create Your Account"
+              : "Reset Password"}
           </h2>
 
           <p className="mt-2 text-sm text-slate-400">
-            Your personal AI assistant for expenses, tasks, journals, places, and
-            daily planning.
+            {mode === "forgot"
+              ? "Enter your email and we’ll send you a password reset link."
+              : "Your personal AI assistant for daily planning."}
           </p>
         </div>
 
@@ -286,13 +350,15 @@ export default function LoginPage() {
             className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
           />
 
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
-          />
+          {mode !== "forgot" && (
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+            />
+          )}
 
           {mode === "signup" && (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 text-xs">
@@ -334,18 +400,49 @@ export default function LoginPage() {
               ? "Please wait..."
               : mode === "login"
               ? "Login"
-              : "Create Account"}
+              : mode === "signup"
+              ? "Create Account"
+              : "Send Reset Link"}
           </button>
         </div>
 
-        <button
-          onClick={switchMode}
-          className="mt-5 text-sm text-blue-400 hover:text-blue-300"
-        >
-          {mode === "login"
-            ? "Need an account? Sign up"
-            : "Already have an account? Login"}
-        </button>
+        <div className="mt-5 flex flex-col gap-3 text-sm">
+          {mode === "login" && (
+            <>
+              <button
+                onClick={() => switchMode("forgot")}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                Forgot password?
+              </button>
+
+              <button
+                onClick={() => switchMode("signup")}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                Need an account? Sign up
+              </button>
+            </>
+          )}
+
+          {mode === "signup" && (
+            <button
+              onClick={() => switchMode("login")}
+              className="text-blue-400 hover:text-blue-300"
+            >
+              Already have an account? Login
+            </button>
+          )}
+
+          {mode === "forgot" && (
+            <button
+              onClick={() => switchMode("login")}
+              className="text-blue-400 hover:text-blue-300"
+            >
+              Back to login
+            </button>
+          )}
+        </div>
       </section>
     </main>
   );
