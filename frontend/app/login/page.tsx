@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import Notice, { NoticeType } from "@/components/ui/Notice";
@@ -43,6 +43,20 @@ export default function LoginPage() {
   const [birthdate, setBirthdate] = useState("");
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const confirmed = params.get("confirmed");
+
+    if (confirmed === "true") {
+      setNotice({
+        type: "success",
+        message: "Email confirmed successfully. You can now login.",
+      });
+
+      window.history.replaceState({}, "", "/login");
+    }
+  }, []);
 
   async function handleAuth() {
     setNotice(null);
@@ -100,6 +114,7 @@ export default function LoginPage() {
           email,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
             data: {
               first_name: firstName,
               last_name: lastName,
