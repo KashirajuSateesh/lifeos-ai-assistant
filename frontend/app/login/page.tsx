@@ -162,24 +162,31 @@ export default function LoginPage() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const profileResponse = await getMyProfile();
+      try {
+        const profileResponse = await getMyProfile();
 
-      if (!profileResponse.profile && user?.user_metadata) {
-        await saveMyProfile({
-          first_name: user.user_metadata.first_name ?? "",
-          last_name: user.user_metadata.last_name ?? "",
-          phone_number: user.user_metadata.phone_number ?? "",
-          birthdate: user.user_metadata.birthdate ?? "",
-        });
+        if (!profileResponse.profile && user?.user_metadata) {
+          await saveMyProfile({
+            first_name: user.user_metadata.first_name ?? "",
+            last_name: user.user_metadata.last_name ?? "",
+            phone_number: user.user_metadata.phone_number ?? "",
+            birthdate: user.user_metadata.birthdate ?? "",
+          });
+        }
+      } catch (profileError) {
+        console.error("Profile setup failed after login:", profileError);
       }
 
       router.push("/");
     } catch (error) {
       console.error(error);
 
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown authentication error";
+
       setNotice({
         type: "error",
-        message: "Authentication failed. Please check your details and try again.",
+        message: errorMessage,
       });
     } finally {
       setLoading(false);
