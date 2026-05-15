@@ -1,309 +1,436 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import AppShell from "@/components/layout/AppShell";
+import Notice, { NoticeType } from "@/components/ui/Notice";
 import { sendChatMessage } from "@/lib/api";
-import { ChatResponse } from "@/lib/types";
+import { supabase } from "@/lib/supabase";
+
+type ConfirmationCard = {
+  title: string;
+  fields: {
+    label: string;
+    value: string;
+  }[];
+};
+
+type ChatApiResponse = {
+  status?: string;
+  message_received?: string;
+  response?: string;
+
+  assistant_message?: string;
+  conversation_status?:
+    | "general_response"
+    | "needs_more_info"
+    | "awaiting_confirmation"
+    | "saved"
+    | "cancelled";
+  selected_agent?: string;
+  intent?: string;
+  collected_data?: Record<string, unknown>;
+  missing_fields?: string[];
+  pending_action?: Record<string, unknown> | null;
+  confirmation_card?: ConfirmationCard | null;
+  routing_source?: string | null;
+  routing_reason?: string | null;
+};
+
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  conversationStatus?: string;
+  selectedAgent?: string;
+  intent?: string;
+  confirmationCard?: ConfirmationCard | null;
+};
+
+function createMessageId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function formatAgentName(agent?: string) {
+  if (!agent) return "LifeOS";
+  return agent.replace("_agent", "").replace("_", " ");
+}
 
 export default function ChatPage() {
-  const [message, setMessage] = useState("");
-  const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
+  const router = useRouter();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: createMessageId(),
+      role: "assistant",
+      content:
+        "Hi! I’m LifeOS. Tell me anything naturally — expenses, tasks, journals, or places — and I’ll help organize it.",
+      timestamp: new Date().toISOString(),
+      conversationStatus: "general_response",
+      selectedAgent: "orchestrator",
+      intent: "general_chat",
+    },
+  ]);
+
+  const [input, setInput] = useState("");
+  const [notice, setNotice] = useState<{
+    type: NoticeType;
+    message: string;
+  } | null>(null);
+
   const [loading, setLoading] = useState(false);
 
-  async function sendMessage() {
-    if (!message.trim()) return;
+  function scrollToBottom() {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+      }
+    }
+
+    checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setMessages([]);
+        setInput("");
+        setNotice(null);
+        router.push("/login");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  async function sendMessage(customMessage?: string) {
+    const messageToSend = (customMessage ?? input).trim();
+
+    if (!messageToSend || loading) return;
+
+    setNotice(null);
+
+    const userMessage: ChatMessage = {
+      id: createMessageId(),
+      role: "user",
+      content: messageToSend,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((currentMessages) => [...currentMessages, userMessage]);
+
+    if (!customMessage) {
+      setInput("");
+    }
 
     setLoading(true);
-    setChatResponse(null);
 
     try {
-      const data = await sendChatMessage(message);
-      setChatResponse(data);
-      setMessage("");
+      const response = (await sendChatMessage(messageToSend)) as ChatApiResponse;
+
+      const assistantText =
+        response.assistant_message ||
+        response.response ||
+        "I processed your message.";
+
+      const assistantMessage: ChatMessage = {
+        id: createMessageId(),
+        role: "assistant",
+        content: assistantText,
+        timestamp: new Date().toISOString(),
+        conversationStatus: response.conversation_status,
+        selectedAgent: response.selected_agent,
+        intent: response.intent,
+        confirmationCard: response.confirmation_card ?? null,
+      };
+
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        assistantMessage,
+      ]);
     } catch (error) {
       console.error(error);
 
-      setChatResponse({
-        status: "error",
-        user_id: "demo-user",
-        message_received: message,
-        response: "Something went wrong while connecting to the backend.",
+      setNotice({
+        type: "error",
+        message:
+          "Chat request failed. Please make sure backend is running and try again.",
       });
+
+      const errorMessage: ChatMessage = {
+        id: createMessageId(),
+        role: "assistant",
+        content:
+          "Sorry, I could not process that right now. Please try again in a moment.",
+        timestamp: new Date().toISOString(),
+        conversationStatus: "general_response",
+        selectedAgent: "orchestrator",
+        intent: "general_chat",
+      };
+
+      setMessages((currentMessages) => [...currentMessages, errorMessage]);
     } finally {
       setLoading(false);
     }
   }
 
-  const expenseData = chatResponse?.extracted_data;
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendMessage();
+  }
+
+  async function sendQuickReply(reply: "yes" | "no") {
+    await sendMessage(reply);
+  }
+
+  function clearFrontendChat() {
+    setMessages([
+      {
+        id: createMessageId(),
+        role: "assistant",
+        content:
+          "Chat cleared. Tell me what you want to organize next.",
+        timestamp: new Date().toISOString(),
+        conversationStatus: "general_response",
+        selectedAgent: "orchestrator",
+        intent: "general_chat",
+      },
+    ]);
+    setInput("");
+    setNotice(null);
+  }
+
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
+
+  const isAwaitingConfirmation =
+    lastAssistantMessage?.conversationStatus === "awaiting_confirmation";
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">AI Assistant Chat</h1>
-          <p className="mt-2 text-slate-400">
-            Type naturally to log expenses, create reminders, write journals, or save places.
-          </p>
-        </div>
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="space-y-3">
-            <textarea
-              className="min-h-32 w-full rounded-xl border border-slate-700 bg-slate-800 p-3 text-white outline-none focus:border-blue-500"
-              placeholder="Try: I spent $25 on lunch or remind me to pay rent tomorrow"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
+      <div className="mx-auto flex h-[calc(100vh-2rem)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+        <header className="border-b border-slate-800 bg-slate-900 px-5 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">LifeOS Chat</h1>
+              <p className="mt-1 text-sm text-slate-400">
+                Chat naturally. I’ll ask follow-up questions and confirm before saving.
+              </p>
+            </div>
 
             <button
-              onClick={sendMessage}
-              disabled={loading}
-              className="w-full rounded-xl bg-blue-600 py-3 font-semibold hover:bg-blue-700 disabled:opacity-60"
+              onClick={clearFrontendChat}
+              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
             >
-              {loading ? "Sending..." : "Send Message"}
+              Clear Chat
             </button>
           </div>
+        </header>
 
-          {chatResponse && (
-            <div className="mt-6 space-y-4">
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <p className="mb-1 text-sm text-slate-400">Assistant Response</p>
-                <p>{chatResponse.response}</p>
-              </div>
+        {notice && (
+          <div className="px-5 pt-4">
+            <Notice type={notice.type} message={notice.message} />
+          </div>
+        )}
 
-              <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-                <p className="mb-3 text-sm text-slate-400">Routing Details</p>
+        <main className="flex-1 overflow-y-auto px-4 py-5">
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${
+                  message.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-md md:max-w-[70%] ${
+                    message.role === "user"
+                      ? "rounded-br-sm bg-blue-600 text-white"
+                      : "rounded-bl-sm border border-slate-700 bg-slate-900 text-slate-100"
+                  }`}
+                >
+                  <div className="mb-1 flex items-center gap-2">
+                    <span
+                      className={`text-xs font-semibold ${
+                        message.role === "user"
+                          ? "text-blue-100"
+                          : "text-blue-300"
+                      }`}
+                    >
+                      {message.role === "user"
+                        ? "You"
+                        : formatAgentName(message.selectedAgent)}
+                    </span>
 
-                <div className="grid grid-cols-1 gap-2 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-400">Intent</span>
-                    <span>{chatResponse.intent ?? "N/A"}</span>
-                  </div>
-
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-400">Selected Agent</span>
-                    <span>{chatResponse.selected_agent ?? "N/A"}</span>
-
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Routing Source</span>
-                      <span>{chatResponse.routing_source ?? "N/A"}</span>
-                    </div>
-
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Confidence</span>
-                      <span>
-                        {chatResponse.confidence != null
-                          ? `${Math.round(chatResponse.confidence * 100)}%`
-                          : "N/A"}
+                    {message.role === "assistant" && message.intent && (
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] capitalize text-slate-400">
+                        {message.intent.replace("_", " ")}
                       </span>
-                    </div>
-
-                    {chatResponse.routing_reason && (
-                      <div className="border-t border-slate-700 pt-2">
-                        <p className="mb-1 text-slate-400">Reason</p>
-                        <p>{chatResponse.routing_reason}</p>
-                      </div>
-                    )}
-                    
-
-
-                  </div>
-                </div>
-              </div>
-
-              {expenseData && chatResponse.selected_agent === "expense_agent" && (
-                <div className="rounded-xl border border-blue-500/40 bg-slate-800 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="font-semibold">Transaction Saved</p>
-                    <span className="rounded-full bg-blue-600 px-3 py-1 text-xs capitalize">
-                      {expenseData.transaction_type ?? "unknown"}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Amount</span>
-                      <span>
-                        {expenseData.amount != null
-                          ? `$${Number(expenseData.amount).toFixed(2)}`
-                          : "Missing"}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Category</span>
-                      <span className="capitalize">{expenseData.category ?? "N/A"}</span>
-                    </div>
-
-                    <div className="border-t border-slate-700 pt-2">
-                      <p className="mb-1 text-slate-400">Description</p>
-                      <p>{expenseData.description ?? "N/A"}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-               {/* Task Agent saved card*/}
-              {chatResponse.selected_agent === "task_agent" && chatResponse.extracted_data && (
-                <div className="rounded-xl border border-purple-500/40 bg-slate-800 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="font-semibold">Task Saved</p>
-                    <span className="rounded-full bg-purple-600 px-3 py-1 text-xs capitalize">
-                      {String(chatResponse.extracted_data.priority ?? "medium")}
-                    </span>
-                  </div>
-
-
-
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <p className="mb-1 text-slate-400">Title</p>
-                      <p>{String(chatResponse.extracted_data.title ?? "N/A")}</p>
-                    </div>
-
-                    <div className="border-t border-slate-700 pt-2">
-                      <p className="mb-1 text-slate-400">Due Date</p>
-                      <p>
-                        {chatResponse.extracted_data.due_date
-                          ? new Date(
-                              String(chatResponse.extracted_data.due_date)
-                            ).toLocaleString()
-                          : "No due date detected"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Journal Saved card */}
-              {chatResponse.selected_agent === "journal_agent" &&
-              chatResponse.extracted_data && (
-                <div className="rounded-xl border border-emerald-500/40 bg-slate-800 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="font-semibold">Journal Saved</p>
-                    <span className="rounded-full bg-emerald-600 px-3 py-1 text-xs capitalize">
-                      {String(chatResponse.extracted_data.mood ?? "neutral")}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <p className="mb-1 text-slate-400">Summary</p>
-                      <p>{String(chatResponse.extracted_data.summary ?? "N/A")}</p>
-                    </div>
-
-                    <div className="border-t border-slate-700 pt-2">
-                      <p className="mb-1 text-slate-400">Entry Date</p>
-                      <p>{String(chatResponse.extracted_data.entry_date ?? "N/A")}</p>
-                    </div>
-
-                    {chatResponse.extracted_data.tags && (
-                      <div className="border-t border-slate-700 pt-2">
-                        <p className="mb-2 text-slate-400">Tags</p>
-                        <div className="flex flex-wrap gap-2">
-                          {chatResponse.extracted_data.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
                     )}
                   </div>
-                </div>
-              )}
 
-                {/* Place Agent saved card*/}
-              
-              {chatResponse.selected_agent === "places_agent" &&
-              chatResponse.extracted_data && (
-                <div className="rounded-xl border border-orange-500/40 bg-slate-800 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="font-semibold">Place Saved</p>
-                    <span className="rounded-full bg-orange-600 px-3 py-1 text-xs capitalize">
-                      {String(chatResponse.extracted_data.status ?? "want_to_visit").replace(
-                        "_",
-                        " "
-                      )}
-                    </span>
-                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-6">
+                    {message.content}
+                  </p>
 
-                  {chatResponse.extracted_data.image_url && (
-                    <img
-                      src={String(chatResponse.extracted_data.image_url)}
-                      alt={String(chatResponse.extracted_data.place_name ?? "Saved place")}
-                      className="mb-4 h-40 w-full rounded-xl object-cover"
+                  {message.confirmationCard && (
+                    <ConfirmationCardView
+                      card={message.confirmationCard}
+                      showActions={
+                        message.conversationStatus === "awaiting_confirmation"
+                      }
+                      onYes={() => sendQuickReply("yes")}
+                      onNo={() => sendQuickReply("no")}
+                      disabled={loading}
                     />
                   )}
 
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <p className="mb-1 text-slate-400">Place Name</p>
-                      <p>{String(chatResponse.extracted_data.place_name ?? "N/A")}</p>
-                    </div>
-
-                    <div className="flex justify-between gap-4 border-t border-slate-700 pt-2">
-                      <span className="text-slate-400">Category</span>
-                      <span className="capitalize">
-                        {String(chatResponse.extracted_data.category ?? "general")}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between gap-4">
-                      <span className="text-slate-400">Location</span>
-                      <span>
-                        {chatResponse.extracted_data.location_known ? "Known" : "Unknown"}
-                      </span>
-                    </div>
-
-                    {chatResponse.extracted_data.city && (
-                      <div className="flex justify-between gap-4">
-                        <span className="text-slate-400">City</span>
-                        <span>{String(chatResponse.extracted_data.city)}</span>
-                      </div>
-                    )}
-
-                    {chatResponse.extracted_data.environment_tags && (
-                      <div className="border-t border-slate-700 pt-2">
-                        <p className="mb-2 text-slate-400">Tags</p>
-                        <div className="flex flex-wrap gap-2">
-                          {chatResponse.extracted_data.environment_tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {chatResponse.extracted_data.source_url && (
-                      <a
-                        href={String(chatResponse.extracted_data.source_url)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-3 inline-block rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700"
-                      >
-                        Open Source Link
-                      </a>
-                    )}
-                  </div>
+                  <p
+                    className={`mt-2 text-[10px] ${
+                      message.role === "user"
+                        ? "text-blue-100/70"
+                        : "text-slate-500"
+                    }`}
+                  >
+                    {new Date(message.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
                 </div>
-              )}
+              </div>
+            ))}
 
+            {loading && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl rounded-bl-sm border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                  LifeOS is typing...
+                </div>
+              </div>
+            )}
 
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
 
+        <footer className="border-t border-slate-800 bg-slate-900 px-4 py-4">
+          {isAwaitingConfirmation && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => sendQuickReply("yes")}
+                disabled={loading}
+                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                Yes, save it
+              </button>
 
+              <button
+                onClick={() => sendQuickReply("no")}
+                disabled={loading}
+                className="rounded-xl border border-red-500/40 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+              >
+                No, cancel
+              </button>
             </div>
           )}
-        </section>
+
+          <form onSubmit={handleSubmit} className="flex gap-3">
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder={
+                isAwaitingConfirmation
+                  ? "Reply yes or no..."
+                  : "Type a message like: I went for lunch today"
+              }
+              disabled={loading}
+              className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-blue-500 disabled:opacity-60"
+            />
+
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Send
+            </button>
+          </form>
+        </footer>
       </div>
     </AppShell>
+  );
+}
+
+function ConfirmationCardView({
+  card,
+  showActions,
+  onYes,
+  onNo,
+  disabled,
+}: {
+  card: ConfirmationCard;
+  showActions: boolean;
+  onYes: () => void;
+  onNo: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="mt-4 rounded-xl border border-blue-500/30 bg-slate-950 p-4">
+      <p className="text-sm font-semibold text-blue-300">{card.title}</p>
+
+      <div className="mt-3 space-y-2">
+        {card.fields.map((field) => (
+          <div
+            key={`${field.label}-${field.value}`}
+            className="flex justify-between gap-4 rounded-lg bg-slate-900 px-3 py-2 text-sm"
+          >
+            <span className="text-slate-400">{field.label}</span>
+            <span className="text-right font-medium text-slate-100">
+              {field.value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {showActions && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={onYes}
+            disabled={disabled}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          >
+            Yes, save
+          </button>
+
+          <button
+            onClick={onNo}
+            disabled={disabled}
+            className="rounded-lg border border-red-500/40 px-4 py-2 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+          >
+            No, cancel
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
