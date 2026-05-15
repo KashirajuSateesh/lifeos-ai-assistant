@@ -13,95 +13,107 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
-def classify_message_with_llm(message: str) -> Dict[str, Any]:
+def classify_message_with_llm(message: str) -> dict:
     """
-    Uses OpenAI to classify the user's message and return structured routing data.
+    Uses LLM to classify the user's message into the correct LifeOS agent.
 
-    Output shape:
-    {
-        "intent": "...",
-        "selected_agent": "...",
-        "confidence": 0.0-1.0,
-        "extracted_data": {},
-        "reason": "short explanation"
-    }
+    Important semantic rule:
+    - Completed money movement = expense_agent
+    - Future money obligation = task_agent
     """
-
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is missing")
 
     system_prompt = """
-You are the Orchestrator Agent for a personal AI assistant app.
+You are the intent router for LifeOS, a multi-agent personal AI assistant.
 
-Your job is to classify the user's message into exactly one agent.
+Your job is to choose exactly one agent for the user's message.
 
 Available agents:
+
 1. expense_agent
-   - Use for money, spending, income, payments, purchases, salary, bills, rent, groceries, food expenses.
-   - Intents: expense_create
+Use this ONLY when the user is describing a completed financial transaction or income event.
+Examples:
+- I spent $18 on lunch
+- I paid $350 rent yesterday
+- I bought groceries for $45
+- I received $3000 salary
+- My friend sent me $50
+- Log my gas expense of $40
 
 2. task_agent
-   - Use for reminders, todos, due dates, things to complete, calls, follow-ups, deadlines.
-   - Intents: task_create
+Use this when the user wants to do something later, needs a reminder, has a due date, or has a future obligation.
+This includes future money-related obligations.
+Examples:
+- I need to pay rent of $350 tomorrow
+- Remind me to pay my electricity bill Friday
+- I have to pay $200 insurance next week
+- Need to finish my resume by Friday
+- Call mom tomorrow
+- Submit project report tonight
+
+CRITICAL RULE:
+If the message contains future intent words such as:
+need to, have to, should, must, remind me, tomorrow, tonight, next week, by Friday, due
+then choose task_agent, even if the message includes money, rent, bill, or $ amount.
+
+Money + future obligation = task_agent.
+Money + already completed transaction = expense_agent.
 
 3. journal_agent
-   - Use for personal reflections, mood, feelings, long daily updates, thoughts, experiences.
-   - Intents: journal_create
+Use this when the user is reflecting about their day, feelings, mood, thoughts, or personal experience.
+Examples:
+- Today I felt stressed but productive
+- My day was exhausting
+- I feel proud because I finished my project
+- Journal this: I had a good day
 
 4. places_agent
-   - Use for saved places, restaurants, trips, locations, Google Maps links, favorite places, want-to-visit places.
-   - Intents: place_create
+Use this when the user wants to save, remember, visit, or describe a place, restaurant, park, trip, location, or Google Maps link.
+Examples:
+- I liked this restaurant called Bombay Grill
+- I want to visit New York someday
+- Save this Google Maps link
+- I want to go to a beach place
 
 5. orchestrator
-   - Use only when the message is general chat and does not fit any app action.
-   - Intents: general_chat
+Use this only for general chat or unclear messages.
 
-Rules:
-- If a message is a long reflection about the user's day, feelings, progress, or experience, choose journal_agent.
-- If a message says "I liked this restaurant called..." choose places_agent, not task_agent.
-- If a message includes a Google Maps link, choose places_agent.
-- If a message contains money amount and purchase/spending context, choose expense_agent.
-- If a message asks to remind, complete, submit, call, or do something later, choose task_agent.
-- Return only valid JSON.
-- Do not include markdown.
-- Do not explain outside JSON.
-
-Required JSON format:
+Return ONLY valid JSON with this schema:
 {
   "intent": "expense_create | task_create | journal_create | place_create | general_chat",
   "selected_agent": "expense_agent | task_agent | journal_agent | places_agent | orchestrator",
   "confidence": 0.0,
-  "extracted_data": {
-    "summary": "short summary of what the user wants"
-  },
-  "reason": "short reason"
+  "reason": "short reason",
+  "extracted_data": {}
 }
+
+Confidence guidance:
+- 0.90+ when routing is obvious
+- 0.70-0.89 when likely
+- below 0.60 when unclear
+
+Do not include markdown.
+Do not include explanations outside JSON.
 """
 
     user_prompt = f"""
-Classify this user message:
+Classify this LifeOS user message:
 
-{message}
+"{message}"
 """
 
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         temperature=0,
         response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt.strip()},
-            {"role": "user", "content": user_prompt.strip()},
-        ],
     )
 
     content = response.choices[0].message.content
 
-    if not content:
-        raise RuntimeError("OpenAI returned empty classification response")
-
-    parsed = json.loads(content)
-
-    return validate_llm_routing_result(parsed)
+    return json.loads(content)
 
 
 def validate_llm_routing_result(result: Dict[str, Any]) -> Dict[str, Any]:

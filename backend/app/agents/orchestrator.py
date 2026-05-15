@@ -35,21 +35,35 @@ def classify_intent(message: str) -> Dict[str, Any]:
     """
     Main Orchestrator.
 
-    First tries OpenAI LLM classification.
-    If OpenAI fails, falls back to rule-based classification.
+    LLM-first routing.
+    Rule-based fallback only when LLM fails or returns very low confidence.
+
+    Important:
+    Future money obligations should route to task_agent.
+    Completed money transactions should route to expense_agent.
     """
 
     if USE_LLM_ORCHESTRATOR:
         try:
             llm_result = classify_message_with_llm(message)
 
-            # If confidence is very low, fallback to rules.
-            if llm_result.get("confidence", 0.0) >= 0.55:
+            selected_agent = llm_result.get("selected_agent", "orchestrator")
+            confidence = float(llm_result.get("confidence", 0.0))
+
+            valid_agents = {
+                "expense_agent",
+                "task_agent",
+                "journal_agent",
+                "places_agent",
+                "orchestrator",
+            }
+
+            if selected_agent in valid_agents and confidence >= 0.60:
                 return {
-                    "intent": llm_result["intent"],
-                    "selected_agent": llm_result["selected_agent"],
+                    "intent": llm_result.get("intent", "general_chat"),
+                    "selected_agent": selected_agent,
                     "extracted_data": llm_result.get("extracted_data", {}),
-                    "confidence": llm_result.get("confidence", 0.0),
+                    "confidence": confidence,
                     "routing_source": "llm",
                     "routing_reason": llm_result.get("reason", ""),
                 }
@@ -60,33 +74,87 @@ def classify_intent(message: str) -> Dict[str, Any]:
 
     rule_result = classify_intent_rule_based(message)
     rule_result["routing_source"] = "rule_based_fallback"
+
     return rule_result
 
 
 def classify_intent_rule_based(message: str) -> Dict[str, Any]:
     """
-    Fallback rule-based classifier.
-    Used when OpenAI fails or confidence is low.
+    Fallback classifier.
+    Used only when LLM fails or returns low confidence.
+
+    This fallback is intentionally simple, but it respects this rule:
+    Future/planned payment = task
+    Completed payment = expense
     """
 
     normalized_message = message.lower().strip()
     word_count = len(normalized_message.split())
 
-    expense_keywords = [
+    future_task_phrases = [
+        "need to",
+        "have to",
+        "has to",
+        "should",
+        "must",
+        "remind me",
+        "reminder",
+        "tomorrow",
+        "tonight",
+        "next week",
+        "next month",
+        "by ",
+        "due",
+        "later",
+        "upcoming",
+    ]
+
+    task_action_keywords = [
+        "pay",
+        "pay rent",
+        "pay bill",
+        "finish",
+        "complete",
+        "submit",
+        "call",
+        "email",
+        "send",
+        "schedule",
+        "todo",
+        "task",
+        "add task",
+        "add todo",
+    ]
+
+    completed_expense_phrases = [
         "spent",
         "paid",
         "bought",
-        "purchase",
-        "expense",
-        "cost",
+        "purchased",
+        "ordered",
+        "got charged",
+        "was charged",
+        "received",
+        "earned",
+        "got paid",
+        "income",
+        "salary",
+        "refund",
+    ]
+
+    expense_context_keywords = [
         "$",
         "dollar",
+        "dollars",
+        "usd",
         "lunch",
         "dinner",
         "groceries",
         "gas",
-        "salary",
-        "income",
+        "rent",
+        "bill",
+        "shopping",
+        "food",
     ]
 
     journal_keywords = [
@@ -147,27 +215,32 @@ def classify_intent_rule_based(message: str) -> Dict[str, Any]:
         "maps.google",
     ]
 
-    task_keywords = [
-        "remind me",
-        "reminder",
-        "todo",
-        "task",
-        "add task",
-        "add todo",
-        "call",
-        "submit",
-        "finish",
-        "complete",
-        "pay rent",
-        "due",
-    ]
+    has_future_signal = contains_phrase(normalized_message, future_task_phrases)
+    has_task_action = contains_phrase(normalized_message, task_action_keywords)
+    has_completed_expense = contains_phrase(
+        normalized_message, completed_expense_phrases
+    )
+    has_money_context = contains_phrase(normalized_message, expense_context_keywords)
 
-    if contains_phrase(normalized_message, expense_keywords):
+    # Highest priority fallback rule:
+    # Future/planned payment should become task, not expense.
+    if has_future_signal and has_task_action:
         return {
-            "intent": "expense_create",
-            "selected_agent": "expense_agent",
+            "intent": "task_create",
+            "selected_agent": "task_agent",
+            "extracted_data": {},
+            "confidence": 0.82,
+            "routing_reason": "Future obligation detected, so routed to task agent.",
+        }
+
+    # Place should be checked before general task because "want to visit" is not a task.
+    if contains_phrase(normalized_message, place_keywords) or "http" in normalized_message:
+        return {
+            "intent": "place_create",
+            "selected_agent": "places_agent",
             "extracted_data": {},
             "confidence": 0.75,
+            "routing_reason": "Place or location intent detected.",
         }
 
     is_reflective_journal = (
@@ -184,7 +257,8 @@ def classify_intent_rule_based(message: str) -> Dict[str, Any]:
             "intent": "journal_create",
             "selected_agent": "journal_agent",
             "extracted_data": {},
-            "confidence": 0.75,
+            "confidence": 0.78,
+            "routing_reason": "Reflective journal-style message detected.",
         }
 
     if contains_phrase(normalized_message, journal_keywords):
@@ -192,23 +266,35 @@ def classify_intent_rule_based(message: str) -> Dict[str, Any]:
             "intent": "journal_create",
             "selected_agent": "journal_agent",
             "extracted_data": {},
-            "confidence": 0.7,
+            "confidence": 0.72,
+            "routing_reason": "Journal keyword detected.",
         }
 
-    if contains_phrase(normalized_message, place_keywords) or "http" in normalized_message:
+    if has_completed_expense and has_money_context:
         return {
-            "intent": "place_create",
-            "selected_agent": "places_agent",
+            "intent": "expense_create",
+            "selected_agent": "expense_agent",
             "extracted_data": {},
-            "confidence": 0.7,
+            "confidence": 0.82,
+            "routing_reason": "Completed financial transaction detected.",
         }
 
-    if contains_phrase(normalized_message, task_keywords):
+    if has_task_action or has_future_signal:
         return {
             "intent": "task_create",
             "selected_agent": "task_agent",
             "extracted_data": {},
-            "confidence": 0.7,
+            "confidence": 0.72,
+            "routing_reason": "Task or reminder intent detected.",
+        }
+
+    if has_money_context:
+        return {
+            "intent": "expense_create",
+            "selected_agent": "expense_agent",
+            "extracted_data": {},
+            "confidence": 0.65,
+            "routing_reason": "Money context detected without future task signal.",
         }
 
     return {
@@ -216,4 +302,5 @@ def classify_intent_rule_based(message: str) -> Dict[str, Any]:
         "selected_agent": "orchestrator",
         "extracted_data": {},
         "confidence": 0.5,
+        "routing_reason": "No clear actionable intent detected.",
     }
