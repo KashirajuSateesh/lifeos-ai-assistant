@@ -1,25 +1,18 @@
-import AuthGuard from "@/components/auth/AuthGuard";
-import BottomNav from "./BottomNav";
-import Sidebar from "./Sidebar";
+"use client";
 
-type AppShellProps = {
-  children: React.ReactNode;
-};
+import BottomNav from "@/components/layout/BottomNav";
+import Sidebar from "@/components/layout/Sidebar";
 
-export default function AppShell({ children }: AppShellProps) {
+export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-slate-950">
-        <div className="flex">
-          <Sidebar />
+    <div className="min-h-screen bg-slate-950 text-white">
+      <Sidebar />
 
-          <main className="min-h-screen flex-1 px-4 py-6 pb-24 text-white lg:px-8 lg:pb-8">
-            {children}
-          </main>
-        </div>
+      <main className="min-h-screen pb-24 md:ml-72 md:pb-0">
+        <div className="min-h-screen p-4 md:p-6">{children}</div>
+      </main>
 
-        <BottomNav />
-      </div>
-    </AuthGuard>
+      <BottomNav />
+    </div>
   );
 }

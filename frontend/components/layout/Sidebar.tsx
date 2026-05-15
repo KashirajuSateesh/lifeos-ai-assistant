@@ -31,7 +31,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="hidden min-h-screen w-64 border-r border-slate-800 bg-slate-950 p-5 text-white lg:block">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-slate-800 bg-slate-900 p-5 md:flex md:flex-col">
       <div className="mb-8">
         <div className="flex items-center gap-3">
           <img
@@ -55,7 +55,7 @@ export default function Sidebar() {
 
       </div>
 
-      <nav className="space-y-2">
+      <nav className="mt-6 flex-1 space-y-2 overflow-y-auto">
         {navItems.map((item) => (
           <Link
             key={item.href}

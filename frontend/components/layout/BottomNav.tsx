@@ -62,7 +62,7 @@ export default function BottomNav() {
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-slate-950 px-2 py-2 text-white lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-800 bg-slate-900/95 px-3 py-2 backdrop-blur md:hidden">
         <div className="grid grid-cols-5 gap-1">
           {mainNavItems.map((item) => (
             <Link

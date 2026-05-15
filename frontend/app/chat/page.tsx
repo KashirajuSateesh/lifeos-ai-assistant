@@ -240,154 +240,156 @@ export default function ChatPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto flex h-[calc(100vh-2rem)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
-        <header className="border-b border-slate-800 bg-slate-900 px-5 py-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">LifeOS Chat</h1>
-              <p className="mt-1 text-sm text-slate-400">
-                Chat naturally. I’ll ask follow-up questions and confirm before saving.
-              </p>
+      <div className="flex h-[calc(100vh-3rem)] overflow-hidden">
+        <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+          <header className="border-b border-slate-800 bg-slate-900 px-5 py-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">LifeOS Chat</h1>
+                <p className="mt-1 text-sm text-slate-400">
+                  Chat naturally. I’ll ask follow-up questions and confirm before saving.
+                </p>
+              </div>
+
+              <button
+                onClick={clearFrontendChat}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
+              >
+                Clear Chat
+              </button>
             </div>
+          </header>
 
-            <button
-              onClick={clearFrontendChat}
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
-            >
-              Clear Chat
-            </button>
-          </div>
-        </header>
-
-        {notice && (
-          <div className="px-5 pt-4">
-            <Notice type={notice.type} message={notice.message} />
-          </div>
-        )}
-
-        <main className="flex-1 overflow-y-auto px-4 py-5">
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-md md:max-w-[70%] ${
-                    message.role === "user"
-                      ? "rounded-br-sm bg-blue-600 text-white"
-                      : "rounded-bl-sm border border-slate-700 bg-slate-900 text-slate-100"
-                  }`}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span
-                      className={`text-xs font-semibold ${
-                        message.role === "user"
-                          ? "text-blue-100"
-                          : "text-blue-300"
-                      }`}
-                    >
-                      {message.role === "user"
-                        ? "You"
-                        : formatAgentName(message.selectedAgent)}
-                    </span>
-
-                    {message.role === "assistant" && message.intent && (
-                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] capitalize text-slate-400">
-                        {message.intent.replace("_", " ")}
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="whitespace-pre-wrap text-sm leading-6">
-                    {message.content}
-                  </p>
-
-                  {message.confirmationCard && (
-                    <ConfirmationCardView
-                      card={message.confirmationCard}
-                      showActions={
-                        message.conversationStatus === "awaiting_confirmation"
-                      }
-                      onYes={() => sendQuickReply("yes")}
-                      onNo={() => sendQuickReply("no")}
-                      disabled={loading}
-                    />
-                  )}
-
-                  <p
-                    className={`mt-2 text-[10px] ${
-                      message.role === "user"
-                        ? "text-blue-100/70"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {new Date(message.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl rounded-bl-sm border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
-                  LifeOS is typing...
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        </main>
-
-        <footer className="border-t border-slate-800 bg-slate-900 px-4 py-4">
-          {isAwaitingConfirmation && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => sendQuickReply("yes")}
-                disabled={loading}
-                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-              >
-                Yes, save it
-              </button>
-
-              <button
-                onClick={() => sendQuickReply("no")}
-                disabled={loading}
-                className="rounded-xl border border-red-500/40 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-60"
-              >
-                No, cancel
-              </button>
+          {notice && (
+            <div className="px-5 pt-4">
+              <Notice type={notice.type} message={notice.message} />
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder={
-                isAwaitingConfirmation
-                  ? "Reply yes or no..."
-                  : "Type a message like: I went for lunch today"
-              }
-              disabled={loading}
-              className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-blue-500 disabled:opacity-60"
-            />
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-md md:max-w-[70%] ${
+                      message.role === "user"
+                        ? "rounded-br-sm bg-blue-600 text-white"
+                        : "rounded-bl-sm border border-slate-700 bg-slate-900 text-slate-100"
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span
+                        className={`text-xs font-semibold ${
+                          message.role === "user"
+                            ? "text-blue-100"
+                            : "text-blue-300"
+                        }`}
+                      >
+                        {message.role === "user"
+                          ? "You"
+                          : formatAgentName(message.selectedAgent)}
+                      </span>
 
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Send
-            </button>
-          </form>
-        </footer>
+                      {message.role === "assistant" && message.intent && (
+                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] capitalize text-slate-400">
+                          {message.intent.replace("_", " ")}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="whitespace-pre-wrap text-sm leading-6">
+                      {message.content}
+                    </p>
+
+                    {message.confirmationCard && (
+                      <ConfirmationCardView
+                        card={message.confirmationCard}
+                        showActions={
+                          message.conversationStatus === "awaiting_confirmation"
+                        }
+                        onYes={() => sendQuickReply("yes")}
+                        onNo={() => sendQuickReply("no")}
+                        disabled={loading}
+                      />
+                    )}
+
+                    <p
+                      className={`mt-2 text-[10px] ${
+                        message.role === "user"
+                          ? "text-blue-100/70"
+                          : "text-slate-500"
+                      }`}
+                    >
+                      {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl rounded-bl-sm border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-300">
+                    LifeOS is typing...
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </main>
+
+          <footer className="shrink-0 border-t border-slate-800 bg-slate-900 px-4 py-4">
+            {isAwaitingConfirmation && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => sendQuickReply("yes")}
+                  disabled={loading}
+                  className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  Yes, save it
+                </button>
+
+                <button
+                  onClick={() => sendQuickReply("no")}
+                  disabled={loading}
+                  className="rounded-xl border border-red-500/40 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+                >
+                  No, cancel
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="flex gap-3">
+              <input
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={
+                  isAwaitingConfirmation
+                    ? "Reply yes or no..."
+                    : "Type a message like: I went for lunch today"
+                }
+                disabled={loading}
+                className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-blue-500 disabled:opacity-60"
+              />
+
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Send
+              </button>
+            </form>
+          </footer>
+        </div>
       </div>
     </AppShell>
   );
