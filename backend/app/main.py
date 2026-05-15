@@ -3,8 +3,11 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from app.graphs.lifeos_graph import run_lifeos_graph
+from app.agents.journal_agent import handle_journal_message
+from app.services.chat_session_store import reset_active_chat_session
 
 from app.schemas import (
     ChatRequest,
@@ -82,6 +85,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class JournalCreateRequest(BaseModel):
+    entry_text: str
+
+@app.post("/api/journal/me")
+def create_journal_entry(
+    request: JournalCreateRequest,
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    if not request.entry_text or len(request.entry_text.strip()) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Journal entry must be at least 10 characters.",
+        )
+
+    result = handle_journal_message(
+        request.entry_text,
+        {},
+        user_id=authenticated_user_id,
+    )
+
+    return {
+        "status": "success",
+        "message": "Journal entry saved successfully.",
+        "journal": result,
+    }
+    
 
 
 # -------------------------
@@ -186,6 +216,18 @@ def chat(
         "agent_result": result.get("agent_result"),
         "routing_source": result.get("routing_source"),
         "routing_reason": result.get("routing_reason"),
+    }
+
+@app.post("/api/chat/reset")
+def reset_chat(
+    authenticated_user_id: str = Depends(get_authenticated_user_id),
+):
+    session = reset_active_chat_session(authenticated_user_id)
+
+    return {
+        "status": "success",
+        "message": "Chat session reset successfully.",
+        "session_id": session.get("id"),
     }
 
 # -------------------------
@@ -665,3 +707,4 @@ def delete_my_account(
         deleted_data=deleted_data,
         message="Account and all related app data deleted successfully",
     )
+

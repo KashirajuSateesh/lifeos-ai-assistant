@@ -460,3 +460,37 @@ export async function deleteMyAccount() {
 
   return response.json();
 }
+
+
+export async function createJournalEntry(entryText: string) {
+  const response = await fetch(`${getBackendUrl()}/api/journal/me`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+    body: JSON.stringify({
+      entry_text: entryText,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Create journal error:", response.status, errorText);
+    throw new Error("Failed to save journal entry.");
+  }
+
+  return response.json();
+}
+
+export async function resetChatSession() {
+  const response = await fetch(`${getBackendUrl()}/api/chat/reset`, {
+    method: "POST",
+    headers: await getAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Reset chat error:", response.status, errorText);
+    throw new Error("Failed to reset chat session.");
+  }
+
+  return response.json();
+}

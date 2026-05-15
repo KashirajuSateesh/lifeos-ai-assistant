@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import Notice, { NoticeType } from "@/components/ui/Notice";
 import {
+  createJournalEntry,
   deleteJournal as deleteJournalApi,
   getMonthlyJournals,
   getRecentJournals,
-  sendChatMessage,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
@@ -160,16 +160,7 @@ export default function JournalPage() {
     setSavingJournal(true);
 
     try {
-      const chatResponse = await sendChatMessage(entryText);
-
-      if (chatResponse.selected_agent !== "journal_agent") {
-        setNotice({
-          type: "info",
-          message:
-            "The message was not routed to Journal Agent. Try starting with: Today I felt...",
-        });
-        return;
-      }
+      await createJournalEntry(entryText);
 
       setEntryText("");
 

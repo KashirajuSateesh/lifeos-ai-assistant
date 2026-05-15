@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import AppShell from "@/components/layout/AppShell";
 import Notice, { NoticeType } from "@/components/ui/Notice";
-import { sendChatMessage } from "@/lib/api";
+import { resetChatSession, sendChatMessage } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 type ConfirmationCard = {
@@ -202,21 +202,33 @@ export default function ChatPage() {
     await sendMessage(reply);
   }
 
-  function clearFrontendChat() {
+  async function clearFrontendChat() {
+    setNotice(null);
+
+    try {
+      await resetChatSession();
+    } catch (error) {
+      console.error(error);
+
+      setNotice({
+        type: "error",
+        message: "Frontend chat cleared, but backend session reset failed.",
+      });
+    }
+
     setMessages([
       {
         id: createMessageId(),
         role: "assistant",
-        content:
-          "Chat cleared. Tell me what you want to organize next.",
+        content: "Chat cleared. Tell me what you want to organize next.",
         timestamp: new Date().toISOString(),
         conversationStatus: "general_response",
         selectedAgent: "orchestrator",
         intent: "general_chat",
       },
     ]);
+
     setInput("");
-    setNotice(null);
   }
 
   const lastAssistantMessage = [...messages]

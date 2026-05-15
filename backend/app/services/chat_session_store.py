@@ -207,3 +207,41 @@ def reset_conversation_focus(conversation_state: Dict[str, Any]) -> Dict[str, An
     state["missing_fields"] = []
 
     return state
+
+def reset_active_chat_session(user_id: str) -> Dict[str, Any]:
+    """
+    Reset the user's active chat session.
+    This clears pending actions and conversation focus.
+    Useful when user clicks Clear Chat or logs out.
+    """
+
+    supabase = get_supabase_client()
+
+    session = get_active_chat_session(user_id)
+
+    if not session:
+        return create_chat_session(user_id)
+
+    reset_state = {
+        "last_messages": [],
+        "current_intent": None,
+        "selected_agent": None,
+        "collected_data": {},
+        "missing_fields": [],
+        "last_place_context": None,
+    }
+
+    result = (
+        supabase.table("chat_sessions")
+        .update(
+            {
+                "conversation_state": reset_state,
+                "pending_action": None,
+                "updated_at": utc_now_iso(),
+            }
+        )
+        .eq("id", session["id"])
+        .execute()
+    )
+
+    return result.data[0]

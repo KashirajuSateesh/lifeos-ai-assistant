@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { resetChatSession } from "@/lib/api";
 
 const mainNavItems = [
   { label: "Home", href: "/" },
@@ -23,6 +24,12 @@ export default function BottomNav() {
   const [showMore, setShowMore] = useState(false);
 
   async function logout() {
+    try {
+      await resetChatSession();
+    } catch (error) {
+      console.error("Failed to reset chat session on logout:", error);
+    }
+
     await supabase.auth.signOut();
     router.push("/login");
   }
