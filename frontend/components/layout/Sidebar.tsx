@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User } from "@supabase/supabase-js";
 
 import { supabase } from "@/lib/supabase";
 
@@ -19,19 +17,6 @@ const navItems = [
 
 export default function Sidebar() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    async function loadUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      setUser(user);
-    }
-
-    loadUser();
-  }, []);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -61,11 +46,6 @@ export default function Sidebar() {
           Expenses, tasks, journals, and places.
         </p>
 
-        {user && (
-          <p className="mt-3 truncate text-xs text-slate-400">
-            {user.email}
-          </p>
-        )}
       </div>
 
       <nav className="space-y-2">

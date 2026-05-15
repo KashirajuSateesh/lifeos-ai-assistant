@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
+import Notice, { NoticeType } from "@/components/ui/Notice";
+import { supabase } from "@/lib/supabase";
+
 import {
   deletePlace as deletePlaceApi,
   getNearbyPlaces,
@@ -52,27 +54,57 @@ function placeImage(place: PlaceItem) {
   return place.image_url;
 }
 
+function getGeolocationErrorMessage(error: GeolocationPositionError) {
+  if (error.code === 1) {
+    return "Location permission was denied. Please allow location access in your browser settings.";
+  }
+
+  if (error.code === 2) {
+    return "Your location is unavailable. Make sure Windows location services are turned on.";
+  }
+
+  if (error.code === 3) {
+    return "Location request timed out. Try again or increase the timeout.";
+  }
+
+  return "Unable to get your location.";
+}
+
 export default function PlacesPage() {
   const router = useRouter();
+
   const [placesData, setPlacesData] = useState<PlacesResponse | null>(null);
+
+  const [notice, setNotice] = useState<{
+    type: NoticeType;
+    message: string;
+  } | null>(null);
+
   const [selectedStatus, setSelectedStatus] =
     useState<PlaceStatusFilter>("all");
   const [selectedCategory, setSelectedCategory] =
     useState<PlaceCategoryFilter>("all");
+
   const [loading, setLoading] = useState(false);
+
   const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlacesResponse | null>(
-  null
+    null
   );
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [nearbyRadiusKm, setNearbyRadiusKm] = useState(10);
+
   const [placeSuggestions, setPlaceSuggestions] =
     useState<PlaceSuggestionsResponse | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  const [placeToDelete, setPlaceToDelete] = useState<PlaceItem | null>(null);
+  const [deletingPlace, setDeletingPlace] = useState(false);
 
   async function fetchPlaces(
     status: PlaceStatusFilter = selectedStatus,
     category: PlaceCategoryFilter = selectedCategory
   ) {
+    setNotice(null);
     setLoading(true);
 
     try {
@@ -84,15 +116,24 @@ export default function PlacesPage() {
       setPlacesData(data);
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch places.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch places.",
+      });
     } finally {
       setLoading(false);
     }
   }
 
   async function checkNearbyPlaces() {
+    setNotice(null);
+
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by this browser.");
+      setNotice({
+        type: "error",
+        message: "Geolocation is not supported by this browser.",
+      });
       return;
     }
 
@@ -108,9 +149,18 @@ export default function PlacesPage() {
           });
 
           setNearbyPlaces(data);
+
+          setNotice({
+            type: "success",
+            message: "Nearby saved places checked successfully.",
+          });
         } catch (error) {
           console.error(error);
-          alert("Failed to check nearby places.");
+
+          setNotice({
+            type: "error",
+            message: "Failed to check nearby places.",
+          });
         } finally {
           setNearbyLoading(false);
         }
@@ -120,20 +170,10 @@ export default function PlacesPage() {
 
         setNearbyLoading(false);
 
-        let message = "Unable to get your location.";
-
-        if (error.code === 1) {
-          message =
-            "Location permission was denied. Please allow location access in your browser settings.";
-        } else if (error.code === 2) {
-          message =
-            "Your location is unavailable. Make sure Windows location services are turned on.";
-        } else if (error.code === 3) {
-          message =
-            "Location request timed out. Try again or increase the timeout.";
-        }
-
-        alert(message);
+        setNotice({
+          type: "error",
+          message: getGeolocationErrorMessage(error),
+        });
       },
       {
         enableHighAccuracy: false,
@@ -144,8 +184,13 @@ export default function PlacesPage() {
   }
 
   async function calculateAllPlaceDistances() {
+    setNotice(null);
+
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by this browser.");
+      setNotice({
+        type: "error",
+        message: "Geolocation is not supported by this browser.",
+      });
       return;
     }
 
@@ -165,17 +210,31 @@ export default function PlacesPage() {
             count: data.count,
             places: data.places,
           });
+
+          setNotice({
+            type: "success",
+            message: "Distances calculated successfully.",
+          });
         } catch (error) {
           console.error(error);
-          alert("Failed to calculate distances.");
+
+          setNotice({
+            type: "error",
+            message: "Failed to calculate distances.",
+          });
         } finally {
           setLoading(false);
         }
       },
       (error) => {
         console.error("Geolocation error:", error);
+
         setLoading(false);
-        alert("Unable to get your current location.");
+
+        setNotice({
+          type: "error",
+          message: getGeolocationErrorMessage(error),
+        });
       },
       {
         enableHighAccuracy: false,
@@ -184,8 +243,6 @@ export default function PlacesPage() {
       }
     );
   }
-
-
 
   async function handleStatusChange(status: PlaceStatusFilter) {
     setSelectedStatus(status);
@@ -198,20 +255,34 @@ export default function PlacesPage() {
   }
 
   async function markVisited(place: PlaceItem) {
+    setNotice(null);
+
     try {
       await updatePlace(place.id, {
         visited: true,
         visited_at: new Date().toISOString(),
       });
 
+      setNotice({
+        type: "success",
+        message: "Place marked as visited.",
+      });
+
       await fetchPlaces(selectedStatus, selectedCategory);
+      await fetchPlaceSuggestions();
     } catch (error) {
       console.error(error);
-      alert("Failed to mark place as visited.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to mark place as visited.",
+      });
     }
   }
 
   async function toggleFavorite(place: PlaceItem) {
+    setNotice(null);
+
     const newStatus =
       place.status === "favorite" ? "want_to_visit" : "favorite";
 
@@ -220,30 +291,68 @@ export default function PlacesPage() {
         status: newStatus,
       });
 
+      setNotice({
+        type: "success",
+        message:
+          newStatus === "favorite"
+            ? "Place moved to favorites."
+            : "Place moved to want-to-visit.",
+      });
+
       await fetchPlaces(selectedStatus, selectedCategory);
+      await fetchPlaceSuggestions();
     } catch (error) {
       console.error(error);
-      alert("Failed to update place status.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to update place status.",
+      });
     }
   }
 
-  async function deletePlace(placeId: string) {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this place?"
-    );
+  function requestDeletePlace(place: PlaceItem) {
+    setNotice(null);
+    setPlaceToDelete(place);
+  }
 
-    if (!confirmDelete) return;
+  function cancelDeletePlace() {
+    if (deletingPlace) return;
+    setPlaceToDelete(null);
+  }
+
+  async function confirmDeletePlace() {
+    if (!placeToDelete) return;
+
+    setNotice(null);
+    setDeletingPlace(true);
 
     try {
-      await deletePlaceApi(placeId);
+      await deletePlaceApi(placeToDelete.id);
+
+      setNotice({
+        type: "success",
+        message: "Place deleted successfully.",
+      });
+
+      setPlaceToDelete(null);
+
       await fetchPlaces(selectedStatus, selectedCategory);
+      await fetchPlaceSuggestions();
     } catch (error) {
       console.error(error);
-      alert("Failed to delete place.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to delete place.",
+      });
+    } finally {
+      setDeletingPlace(false);
     }
   }
 
   async function fetchPlaceSuggestions() {
+    setNotice(null);
     setSuggestionsLoading(true);
 
     try {
@@ -251,7 +360,11 @@ export default function PlacesPage() {
       setPlaceSuggestions(data);
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch place suggestions.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch place suggestions.",
+      });
     } finally {
       setSuggestionsLoading(false);
     }
@@ -281,9 +394,12 @@ export default function PlacesPage() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Saved Places</h1>
           <p className="mt-2 text-slate-400">
-            Save favorite places, travel ideas, map links, photos, and location reminders.
+            Save favorite places, travel ideas, map links, photos, and location
+            reminders.
           </p>
         </div>
+
+        {notice && <Notice type={notice.type} message={notice.message} />}
 
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex items-start justify-between gap-4">
@@ -354,15 +470,16 @@ export default function PlacesPage() {
           </div>
         </section>
 
-
-        {/* Nearby Places */}
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
-              <p className="text-sm font-medium text-blue-400">Nearby Reminder</p>
+              <p className="text-sm font-medium text-blue-400">
+                Nearby Reminder
+              </p>
               <h2 className="text-2xl font-bold">Check Nearby Saved Places</h2>
               <p className="mt-2 text-slate-400">
-                Allow location access to find saved places near you while the app is open.
+                Allow location access to find saved places near you while the app
+                is open.
               </p>
             </div>
 
@@ -415,7 +532,8 @@ export default function PlacesPage() {
                         <div>
                           <p className="font-semibold">{place.place_name}</p>
                           <p className="mt-1 text-sm capitalize text-slate-400">
-                            {place.category ?? "general"} · {place.status.replace("_", " ")}
+                            {place.category ?? "general"} ·{" "}
+                            {place.status.replace("_", " ")}
                           </p>
                         </div>
 
@@ -425,7 +543,8 @@ export default function PlacesPage() {
                       </div>
 
                       <p className="mt-3 text-sm text-slate-300">
-                        This saved place is nearby. Do you want to visit or try it?
+                        This saved place is nearby. Do you want to visit or try
+                        it?
                       </p>
 
                       {place.address && (
@@ -488,7 +607,8 @@ export default function PlacesPage() {
                     <div>
                       <p className="font-semibold">{place.place_name}</p>
                       <p className="mt-1 text-sm capitalize text-slate-400">
-                        {place.category ?? "general"} · {place.status.replace("_", " ")}
+                        {place.category ?? "general"} ·{" "}
+                        {place.status.replace("_", " ")}
                       </p>
                     </div>
 
@@ -540,14 +660,10 @@ export default function PlacesPage() {
           )}
         </section>
 
-
-
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-blue-400">
-                Saved Places
-              </p>
+              <p className="text-sm font-medium text-blue-400">Saved Places</p>
               <h2 className="text-2xl font-bold">
                 {placesData?.count ?? 0} place(s)
               </h2>
@@ -625,6 +741,7 @@ export default function PlacesPage() {
                             : "Location unknown"}
                         </span>
                       </div>
+
                       <div className="flex justify-between gap-3">
                         <span className="text-slate-400">Location</span>
                         <span className="text-right">
@@ -689,7 +806,7 @@ export default function PlacesPage() {
                       )}
 
                       <button
-                        onClick={() => deletePlace(place.id)}
+                        onClick={() => requestDeletePlace(place)}
                         className="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
                       >
                         Delete
@@ -711,6 +828,54 @@ export default function PlacesPage() {
           )}
         </section>
       </div>
+
+      {placeToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-2xl">
+            <p className="text-sm font-medium text-red-300">Delete Place</p>
+
+            <h2 className="mt-2 text-2xl font-bold">Are you sure?</h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              This will permanently delete this saved place. This action cannot
+              be undone.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="font-semibold">{placeToDelete.place_name}</p>
+
+              <p className="mt-1 text-sm capitalize text-slate-400">
+                {placeToDelete.category ?? "general"} ·{" "}
+                {statusLabel(placeToDelete.status)}
+              </p>
+
+              {placeToDelete.address && (
+                <p className="mt-2 line-clamp-2 text-xs text-slate-500">
+                  {placeToDelete.address}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={cancelDeletePlace}
+                disabled={deletingPlace}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeletePlace}
+                disabled={deletingPlace}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingPlace ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

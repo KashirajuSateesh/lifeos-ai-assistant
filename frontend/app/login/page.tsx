@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import Notice, { NoticeType } from "@/components/ui/Notice";
 import { getMyProfile, saveMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
-
 
 function validatePassword(password: string) {
   const checks = {
@@ -27,12 +27,12 @@ function validatePassword(password: string) {
 export default function LoginPage() {
   const router = useRouter();
 
+  const [mode, setMode] = useState<"login" | "signup">("login");
+
   const [notice, setNotice] = useState<{
-    type: "success" | "error" | "info";
+    type: NoticeType;
     message: string;
   } | null>(null);
-
-  const [mode, setMode] = useState<"login" | "signup">("login");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,6 +61,22 @@ export default function LoginPage() {
         message: "Please enter first name and last name.",
       });
       return;
+    }
+
+    if (mode === "signup" && birthdate) {
+      const selectedBirthdate = new Date(birthdate);
+      const today = new Date();
+
+      selectedBirthdate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+
+      if (selectedBirthdate > today) {
+        setNotice({
+          type: "error",
+          message: "Birthdate cannot be in the future.",
+        });
+        return;
+      }
     }
 
     if (mode === "signup") {
@@ -148,58 +164,53 @@ export default function LoginPage() {
 
       setNotice({
         type: "error",
-        message:
-          "Authentication failed. Please check your details and try again.",
+        message: "Authentication failed. Please check your details and try again.",
       });
     } finally {
       setLoading(false);
     }
   }
 
+  function switchMode() {
+    setNotice(null);
+    setMode(mode === "login" ? "signup" : "login");
+    setPassword("");
+  }
+
+  const passwordValidation = validatePassword(password);
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-white">
       <section className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-        <div className="mb-6">
-          <div className="mb-4 flex items-center gap-3">
-            <img
-              src="/lifeos-logo.png"
-              alt="LifeOS Logo"
-              className="h-24 w-24 rounded-xl object-cover"
-              onError={(event) => {
-                event.currentTarget.style.display = "none";
-              }}
-            />
+        <div className="mb-6 flex flex-col items-center text-center">
+          <img
+            src="/lifeos-logo.png"
+            alt="LifeOS Logo"
+            className="h-24 w-24 rounded-2xl object-cover shadow-lg"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
 
-            <div>
-              <h1 className="text-5xl font-extrabold tracking-tight text-white">
-                LifeOS
-              </h1>
-              <p className="text-sm text-blue-400">
-                Personal AI Operating System
-              </p>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold">
+          <h1 className="mt-4 text-5xl font-extrabold tracking-tight text-white">
+            LifeOS
+          </h1>
+
+          <p className="mt-2 text-sm text-blue-400">
+            Personal AI Operating System
+          </p>
+
+          <h2 className="mt-6 text-2xl font-bold">
             {mode === "login" ? "Welcome Back" : "Create Your Account"}
           </h2>
-          <p className="mt-2 text-slate-400">
-            Your personal AI assistant for expenses, tasks, journals, places, and daily planning.
+
+          <p className="mt-2 text-sm text-slate-400">
+            Your personal AI assistant for expenses, tasks, journals, places, and
+            daily planning.
           </p>
         </div>
 
-        {notice && (
-          <div
-            className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
-              notice.type === "success"
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                : notice.type === "error"
-                ? "border-red-500/40 bg-red-500/10 text-red-300"
-                : "border-blue-500/40 bg-blue-500/10 text-blue-300"
-            }`}
-          >
-            {notice.message}
-          </div>
-        )}
+        {notice && <Notice type={notice.type} message={notice.message} />}
 
         <div className="space-y-3">
           {mode === "signup" && (
@@ -237,6 +248,7 @@ export default function LoginPage() {
                 <input
                   type="date"
                   value={birthdate}
+                  max={new Date().toISOString().split("T")[0]}
                   onChange={(event) => setBirthdate(event.target.value)}
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
                 />
@@ -262,27 +274,29 @@ export default function LoginPage() {
 
           {mode === "signup" && (
             <div className="rounded-xl border border-slate-700 bg-slate-800 p-3 text-xs">
-              <p className="mb-2 font-medium text-slate-300">Password must include:</p>
+              <p className="mb-2 font-medium text-slate-300">
+                Password must include:
+              </p>
 
               <div className="space-y-1">
                 <PasswordRule
-                  valid={validatePassword(password).checks.minLength}
+                  valid={passwordValidation.checks.minLength}
                   label="At least 8 characters"
                 />
                 <PasswordRule
-                  valid={validatePassword(password).checks.hasUppercase}
+                  valid={passwordValidation.checks.hasUppercase}
                   label="One uppercase letter"
                 />
                 <PasswordRule
-                  valid={validatePassword(password).checks.hasLowercase}
+                  valid={passwordValidation.checks.hasLowercase}
                   label="One lowercase letter"
                 />
                 <PasswordRule
-                  valid={validatePassword(password).checks.hasNumber}
+                  valid={passwordValidation.checks.hasNumber}
                   label="One number"
                 />
                 <PasswordRule
-                  valid={validatePassword(password).checks.hasSymbol}
+                  valid={passwordValidation.checks.hasSymbol}
                   label="One symbol"
                 />
               </div>
@@ -303,7 +317,7 @@ export default function LoginPage() {
         </div>
 
         <button
-          onClick={() => setMode(mode === "login" ? "signup" : "login")}
+          onClick={switchMode}
           className="mt-5 text-sm text-blue-400 hover:text-blue-300"
         >
           {mode === "login"

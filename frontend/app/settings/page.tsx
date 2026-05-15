@@ -4,13 +4,20 @@ import { ChangeEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import AppShell from "@/components/layout/AppShell";
+import Notice, { NoticeType } from "@/components/ui/Notice";
 import { deleteMyAccount, getMyProfile, updateMyProfile } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { Profile } from "@/lib/types";
 
 export default function SettingsPage() {
   const router = useRouter();
+
   const [profile, setProfile] = useState<Profile | null>(null);
+
+  const [notice, setNotice] = useState<{
+    type: NoticeType;
+    message: string;
+  } | null>(null);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -22,14 +29,16 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [deletingAccount, setDeletingAccount] = useState(false);
-
   async function loadSettings() {
+    setNotice(null);
     setLoading(true);
 
     try {
@@ -42,7 +51,7 @@ export default function SettingsPage() {
         return;
       }
 
-      setEmail(user?.email ?? "");
+      setEmail(user.email ?? "");
 
       const data = await getMyProfile();
 
@@ -56,16 +65,39 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error(error);
-      alert("Failed to load settings.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to load settings. Please refresh the page.",
+      });
     } finally {
       setLoading(false);
     }
   }
 
   async function saveSettings() {
+    setNotice(null);
     setSaving(true);
 
     try {
+      if (birthdate) {
+        const selectedBirthdate = new Date(birthdate);
+        const today = new Date();
+
+        selectedBirthdate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+
+        if (selectedBirthdate > today) {
+          setNotice({
+            type: "error",
+            message: "Birthdate cannot be in the future.",
+          });
+
+          setSaving(false);
+          return;
+        }
+      }
+
       const data = await updateMyProfile({
         first_name: firstName,
         last_name: lastName,
@@ -76,10 +108,18 @@ export default function SettingsPage() {
 
       setProfile(data.profile);
       setIsEditing(false);
-      alert("Profile updated successfully.");
+
+      setNotice({
+        type: "success",
+        message: "Profile updated successfully.",
+      });
     } catch (error) {
       console.error(error);
-      alert("Failed to update profile.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to update profile. Please try again.",
+      });
     } finally {
       setSaving(false);
     }
@@ -94,10 +134,13 @@ export default function SettingsPage() {
       setProfilePhotoUrl(profile.profile_photo_url ?? "");
     }
 
+    setNotice(null);
     setIsEditing(false);
   }
 
   async function uploadProfilePhoto(event: ChangeEvent<HTMLInputElement>) {
+    setNotice(null);
+
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -108,7 +151,10 @@ export default function SettingsPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        alert("Please login again.");
+        setNotice({
+          type: "error",
+          message: "Please login again.",
+        });
         return;
       }
 
@@ -139,26 +185,45 @@ export default function SettingsPage() {
 
       setProfile(updatedProfile.profile);
 
-      alert("Profile photo updated.");
+      setNotice({
+        type: "success",
+        message: "Profile photo updated successfully.",
+      });
     } catch (error) {
       console.error(error);
-      alert("Failed to upload profile photo. Check your Supabase Storage bucket.");
+
+      setNotice({
+        type: "error",
+        message:
+          "Failed to upload profile photo. Please check your storage settings.",
+      });
     }
   }
 
   async function changePassword() {
+    setNotice(null);
+
     if (!newPassword || !confirmPassword) {
-      alert("Please enter and confirm your new password.");
+      setNotice({
+        type: "error",
+        message: "Please enter and confirm your new password.",
+      });
       return;
     }
 
-    if (newPassword.length < 6) {
-      alert("Password should be at least 6 characters.");
+    if (newPassword.length < 8) {
+      setNotice({
+        type: "error",
+        message: "Password should be at least 8 characters.",
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert("Passwords do not match.");
+      setNotice({
+        type: "error",
+        message: "Passwords do not match.",
+      });
       return;
     }
 
@@ -174,37 +239,57 @@ export default function SettingsPage() {
       setNewPassword("");
       setConfirmPassword("");
 
-      alert("Password changed successfully.");
+      setNotice({
+        type: "success",
+        message: "Password changed successfully.",
+      });
     } catch (error) {
       console.error(error);
-      alert("Failed to change password.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to change password. Please try again.",
+      });
     }
   }
 
-  async function handleDeleteAccount() {
+  function requestDeleteAccount() {
+    setNotice(null);
+
     if (deleteConfirmText !== "DELETE") {
-      alert('Please type "DELETE" to confirm account deletion.');
+      setNotice({
+        type: "error",
+        message: 'Please type "DELETE" to confirm account deletion.',
+      });
       return;
     }
 
-    const confirmDelete = window.confirm(
-      "This will permanently delete your account and all app data. Are you absolutely sure?"
-    );
+    setShowDeleteModal(true);
+  }
 
-    if (!confirmDelete) return;
+  function cancelDeleteAccount() {
+    if (deletingAccount) return;
+    setShowDeleteModal(false);
+  }
 
+  async function confirmDeleteAccount() {
     setDeletingAccount(true);
+    setNotice(null);
 
     try {
       await deleteMyAccount();
-
       await supabase.auth.signOut();
 
-      alert("Your account has been deleted.");
       window.location.href = "/login";
     } catch (error) {
       console.error(error);
-      alert("Failed to delete account. Please try again.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to delete account. Please try again.",
+      });
+
+      setShowDeleteModal(false);
     } finally {
       setDeletingAccount(false);
     }
@@ -226,6 +311,8 @@ export default function SettingsPage() {
             View and update your profile, password, and account preferences.
           </p>
         </div>
+
+        {notice && <Notice type={notice.type} message={notice.message} />}
 
         {loading ? (
           <p className="text-slate-400">Loading settings...</p>
@@ -266,7 +353,10 @@ export default function SettingsPage() {
 
                 {!isEditing ? (
                   <button
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                      setNotice(null);
+                      setIsEditing(true);
+                    }}
                     className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-700"
                   >
                     Edit Profile
@@ -339,6 +429,7 @@ export default function SettingsPage() {
                     <input
                       type="date"
                       value={birthdate}
+                      max={new Date().toISOString().split("T")[0]}
                       onChange={(event) => setBirthdate(event.target.value)}
                       className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
                     />
@@ -385,8 +476,9 @@ export default function SettingsPage() {
               <h2 className="mt-1 text-2xl font-bold">Delete Account</h2>
 
               <p className="mt-2 text-sm text-red-200/80">
-                This will permanently delete your profile, expenses, tasks, journals,
-                places, and login account. This action cannot be undone.
+                This will permanently delete your profile, expenses, tasks,
+                journals, places, and login account. This action cannot be
+                undone.
               </p>
 
               <div className="mt-5">
@@ -404,7 +496,7 @@ export default function SettingsPage() {
               </div>
 
               <button
-                onClick={handleDeleteAccount}
+                onClick={requestDeleteAccount}
                 disabled={deletingAccount || deleteConfirmText !== "DELETE"}
                 className="mt-4 rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -414,6 +506,46 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-red-900/60 bg-slate-900 p-6 text-white shadow-2xl">
+            <p className="text-sm font-medium text-red-300">Delete Account</p>
+
+            <h2 className="mt-2 text-2xl font-bold">Are you absolutely sure?</h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              This will permanently delete your account and all LifeOS data,
+              including expenses, tasks, journals, saved places, profile, and
+              login account. This action cannot be undone.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-red-900/60 bg-red-950/20 p-4">
+              <p className="text-sm text-red-200">
+                Account: <span className="font-semibold">{email}</span>
+              </p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={cancelDeleteAccount}
+                disabled={deletingAccount}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeleteAccount}
+                disabled={deletingAccount}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingAccount ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }

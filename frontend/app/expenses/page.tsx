@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
-import {
-  deleteExpense as deleteExpenseApi,
-  getExpenses,
-  updateExpense as updateExpenseApi,
-} from "@/lib/api";
+import Notice, { NoticeType } from "@/components/ui/Notice";
+import { deleteExpense, getExpenses, updateExpense } from "@/lib/api";
+import { supabase } from "@/lib/supabase";
 import {
   ExpenseCategoryFilter,
   ExpenseItem,
@@ -17,43 +14,30 @@ import {
   PeriodFilter,
 } from "@/lib/types";
 
-const periodOptions: { label: string; value: PeriodFilter }[] = [
-  { label: "All", value: "all" },
-  { label: "Today", value: "today" },
-  { label: "This Week", value: "this_week" },
-  { label: "This Month", value: "this_month" },
-  { label: "This Year", value: "this_year" },
-];
-
-const expenseCategoryOptions: {
-  label: string;
-  value: ExpenseCategoryFilter;
-}[] = [
-  { label: "All Categories", value: "all" },
-  { label: "Food", value: "food" },
-  { label: "Groceries", value: "groceries" },
-  { label: "Transport", value: "transport" },
-  { label: "Shopping", value: "shopping" },
-  { label: "Rent", value: "rent" },
-  { label: "Utilities", value: "utilities" },
-  { label: "Health", value: "health" },
-  { label: "Entertainment", value: "entertainment" },
-  { label: "Income", value: "income" },
-  { label: "Other", value: "other" },
-];
-
 export default function ExpensesPage() {
   const router = useRouter();
+
   const [expensesData, setExpensesData] = useState<ExpensesResponse | null>(
     null
   );
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>("all");
-  const [selectedExpenseCategory, setSelectedExpenseCategory] =
+
+  const [notice, setNotice] = useState<{
+    type: NoticeType;
+    message: string;
+  } | null>(null);
+
+  const [loading, setLoading] = useState(false);
+
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
+  const [categoryFilter, setCategoryFilter] =
     useState<ExpenseCategoryFilter>("all");
+
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
-  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(
+    null
+  );
   const [editAmount, setEditAmount] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -61,13 +45,16 @@ export default function ExpensesPage() {
     "debit" | "credit"
   >("debit");
 
-  const [expensesLoading, setExpensesLoading] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] =
+    useState<ExpenseItem | null>(null);
+  const [deletingExpense, setDeletingExpense] = useState(false);
 
   async function fetchExpenses(
-    period: PeriodFilter = selectedPeriod,
-    category: ExpenseCategoryFilter = selectedExpenseCategory
+    period: PeriodFilter = periodFilter,
+    category: ExpenseCategoryFilter = categoryFilter
   ) {
-    setExpensesLoading(true);
+    setNotice(null);
+    setLoading(true);
 
     try {
       const data = await getExpenses({
@@ -76,108 +63,153 @@ export default function ExpensesPage() {
       });
 
       setExpensesData(data);
+      setPeriodFilter(period);
+      setCategoryFilter(category);
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch expenses.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch expenses.",
+      });
     } finally {
-      setExpensesLoading(false);
+      setLoading(false);
     }
   }
 
-  async function handlePeriodChange(period: PeriodFilter) {
-    setSelectedPeriod(period);
-    await fetchExpenses(period, selectedExpenseCategory);
-  }
+  async function fetchCustomDateExpenses() {
+    setNotice(null);
 
-  async function handleExpenseCategoryChange(category: ExpenseCategoryFilter) {
-    setSelectedExpenseCategory(category);
-    await fetchExpenses(selectedPeriod, category);
-  }
-
-  async function handleCustomDateSearch() {
     if (!customStartDate || !customEndDate) {
-      alert("Please select both start date and end date.");
+      setNotice({
+        type: "error",
+        message: "Please select both start date and end date.",
+      });
       return;
     }
 
-    setExpensesLoading(true);
+    setLoading(true);
 
     try {
-      const startDateTime = `${customStartDate}T00:00:00.000Z`;
-      const endDateTime = `${customEndDate}T23:59:59.999Z`;
-
       const data = await getExpenses({
-        startDate: startDateTime,
-        endDate: endDateTime,
-        category: selectedExpenseCategory,
+        period: "all",
+        category: categoryFilter,
+        startDate: customStartDate,
+        endDate: customEndDate,
       });
 
-      setSelectedPeriod("all");
       setExpensesData(data);
+      setPeriodFilter("all");
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch custom date expenses.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch custom date expenses.",
+      });
     } finally {
-      setExpensesLoading(false);
+      setLoading(false);
     }
   }
 
-  function startEditingExpense(expense: ExpenseItem) {
-    setEditingExpenseId(expense.id);
+  function startEdit(expense: ExpenseItem) {
+    setNotice(null);
+    setEditingExpense(expense);
     setEditAmount(String(expense.amount));
-    setEditCategory(expense.category);
+    setEditCategory(expense.category ?? "");
     setEditDescription(expense.description ?? "");
-    setEditTransactionType(expense.transaction_type as "debit" | "credit");
+    setEditTransactionType(
+      expense.transaction_type === "credit" ? "credit" : "debit"
+    );
   }
 
-  function cancelEditingExpense() {
-    setEditingExpenseId(null);
+  function cancelEdit() {
+    setEditingExpense(null);
     setEditAmount("");
     setEditCategory("");
     setEditDescription("");
     setEditTransactionType("debit");
   }
 
-  async function updateExpense(expenseId: string) {
-    if (!editAmount || Number(editAmount) <= 0) {
-      alert("Please enter a valid amount.");
+  async function saveEdit() {
+    setNotice(null);
+
+    if (!editingExpense) return;
+
+    const numericAmount = Number(editAmount);
+
+    if (!numericAmount || numericAmount <= 0) {
+      setNotice({
+        type: "error",
+        message: "Please enter a valid amount.",
+      });
       return;
     }
 
     if (!editCategory.trim()) {
-      alert("Please enter a category.");
+      setNotice({
+        type: "error",
+        message: "Please enter a category.",
+      });
       return;
     }
 
     try {
-      await updateExpenseApi(expenseId, {
-        amount: Number(editAmount),
+      await updateExpense(editingExpense.id, {
+        amount: numericAmount,
         category: editCategory,
         description: editDescription,
         transaction_type: editTransactionType,
       });
 
-      cancelEditingExpense();
-      await fetchExpenses(selectedPeriod, selectedExpenseCategory);
+      cancelEdit();
+
+      setNotice({
+        type: "success",
+        message: "Transaction updated successfully.",
+      });
+
+      await fetchExpenses(periodFilter, categoryFilter);
     } catch (error) {
       console.error(error);
-      alert("Failed to update transaction. Please try again.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to update transaction. Please try again.",
+      });
     }
   }
 
-  async function deleteExpense(expenseId: string) {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this transaction?"
-    );
+  function requestDeleteExpense(expense: ExpenseItem) {
+    setNotice(null);
+    setExpenseToDelete(expense);
+  }
 
-    if (!confirmDelete) return;
+  async function confirmDeleteExpense() {
+    if (!expenseToDelete) return;
+
+    setNotice(null);
+    setDeletingExpense(true);
 
     try {
-      await deleteExpenseApi(expenseId);
-      await fetchExpenses(selectedPeriod, selectedExpenseCategory);
+      await deleteExpense(expenseToDelete.id);
+
+      setNotice({
+        type: "success",
+        message: "Transaction deleted successfully.",
+      });
+
+      setExpenseToDelete(null);
+      await fetchExpenses(periodFilter, categoryFilter);
     } catch (error) {
       console.error(error);
-      alert("Failed to delete transaction. Please try again.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to delete transaction. Please try again.",
+      });
+    } finally {
+      setDeletingExpense(false);
     }
   }
 
@@ -198,9 +230,11 @@ export default function ExpensesPage() {
     loadPage();
   }, []);
 
+  const expenses = expensesData?.expenses ?? [];
+
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Money Overview</h1>
           <p className="mt-2 text-slate-400">
@@ -208,298 +242,344 @@ export default function ExpensesPage() {
           </p>
         </div>
 
+        {notice && <Notice type={notice.type} message={notice.message} />}
+
+        <section className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <SummaryCard
+            title="Money In"
+            value={`$${(expensesData?.total_credit ?? 0).toFixed(2)}`}
+            description="Total income"
+          />
+
+          <SummaryCard
+            title="Money Out"
+            value={`$${(expensesData?.total_debit ?? 0).toFixed(2)}`}
+            description="Total spending"
+          />
+
+          <SummaryCard
+            title="Net Balance"
+            value={`$${(expensesData?.net_balance ?? 0).toFixed(2)}`}
+            description="Income minus spending"
+          />
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold">Filters</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Filter your transactions by period, category, or custom date.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                Period
+              </label>
+              <select
+                value={periodFilter}
+                onChange={(event) =>
+                  fetchExpenses(
+                    event.target.value as PeriodFilter,
+                    categoryFilter
+                  )
+                }
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="today">Today</option>
+                <option value="this_week">This Week</option>
+                <option value="this_month">This Month</option>
+                <option value="this_year">This Year</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                Category
+              </label>
+              <select
+                value={categoryFilter}
+                onChange={(event) =>
+                  fetchExpenses(
+                    periodFilter,
+                    event.target.value as ExpenseCategoryFilter
+                  )
+                }
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              >
+                <option value="all">All</option>
+                <option value="food">Food</option>
+                <option value="groceries">Groceries</option>
+                <option value="transport">Transport</option>
+                <option value="rent">Rent</option>
+                <option value="utilities">Utilities</option>
+                <option value="health">Health</option>
+                <option value="entertainment">Entertainment</option>
+                <option value="shopping">Shopping</option>
+                <option value="income">Income</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(event) => setCustomStartDate(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(event) => setCustomEndDate(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={fetchCustomDateExpenses}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-700"
+            >
+              Apply Custom Date
+            </button>
+
+            <button
+              onClick={() => {
+                setCustomStartDate("");
+                setCustomEndDate("");
+                fetchExpenses("all", "all");
+              }}
+              className="rounded-xl border border-slate-700 px-5 py-3 text-sm hover:bg-slate-800"
+            >
+              Reset Filters
+            </button>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-6 flex items-start justify-between gap-4">
+          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-bold">Transactions</h2>
-              <p className="mt-2 text-slate-400">
-                Filter transactions by time period and category.
+              <p className="mt-1 text-sm text-slate-400">
+                {expensesData?.count ?? 0} transactions found.
               </p>
             </div>
 
             <button
-              onClick={() =>
-                fetchExpenses(selectedPeriod, selectedExpenseCategory)
-              }
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+              onClick={() => fetchExpenses(periodFilter, categoryFilter)}
+              className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
             >
               Refresh
             </button>
           </div>
 
-          <div className="mb-5 flex flex-wrap gap-2">
-            {periodOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => handlePeriodChange(option.value)}
-                className={`rounded-full px-3 py-2 text-sm transition ${
-                  selectedPeriod === option.value
-                    ? "bg-blue-600 text-white"
-                    : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mb-5">
-            <label className="mb-2 block text-sm text-slate-400">
-              Filter by Category
-            </label>
-
-            <select
-              value={selectedExpenseCategory}
-              onChange={(event) =>
-                handleExpenseCategoryChange(
-                  event.target.value as ExpenseCategoryFilter
-                )
-              }
-              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-            >
-              {expenseCategoryOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800 p-4">
-            <p className="mb-3 text-sm font-medium text-slate-300">
-              Custom Date Range
-            </p>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={customStartDate}
-                  onChange={(event) => setCustomStartDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={customEndDate}
-                  onChange={(event) => setCustomEndDate(event.target.value)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleCustomDateSearch}
-              className="mt-3 w-full rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600"
-            >
-              Apply Custom Range
-            </button>
-          </div>
-
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-              <p className="text-sm text-slate-400">Money In</p>
-              <p className="mt-1 text-xl font-bold">
-                ${expensesData?.total_credit?.toFixed(2) ?? "0.00"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-              <p className="text-sm text-slate-400">Money Out</p>
-              <p className="mt-1 text-xl font-bold">
-                ${expensesData?.total_debit?.toFixed(2) ?? "0.00"}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-              <p className="text-sm text-slate-400">Net Balance</p>
-              <p className="mt-1 text-xl font-bold">
-                ${expensesData?.net_balance?.toFixed(2) ?? "0.00"}
-              </p>
-            </div>
-          </div>
-
-          <div className="mb-4 rounded-xl border border-slate-700 bg-slate-800 p-4 text-sm">
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-400">Selected Period</span>
-              <span className="capitalize">
-                {selectedPeriod.replace("_", " ")}
-              </span>
-            </div>
-
-            <div className="mt-2 flex justify-between gap-4">
-              <span className="text-slate-400">Selected Category</span>
-              <span className="capitalize">
-                {selectedExpenseCategory.replace("_", " ")}
-              </span>
-            </div>
-
-            <div className="mt-2 flex justify-between gap-4">
-              <span className="text-slate-400">Records</span>
-              <span>{expensesData?.count ?? 0}</span>
-            </div>
-          </div>
-
-          {expensesLoading ? (
+          {loading ? (
             <p className="text-slate-400">Loading expenses...</p>
-          ) : expensesData && expensesData.expenses.length > 0 ? (
+          ) : expenses.length === 0 ? (
+            <p className="text-slate-400">No transactions found.</p>
+          ) : (
             <div className="space-y-3">
-              {expensesData.expenses.slice(0, 20).map((expense) => {
-                const isEditing = editingExpenseId === expense.id;
+              {expenses.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="rounded-xl border border-slate-700 bg-slate-800 p-4"
+                >
+                  {editingExpense?.id === expense.id ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                        <input
+                          type="number"
+                          value={editAmount}
+                          onChange={(event) => setEditAmount(event.target.value)}
+                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                          placeholder="Amount"
+                        />
 
-                return (
-                  <div
-                    key={expense.id}
-                    className="rounded-xl border border-slate-700 bg-slate-800 p-4"
-                  >
-                    {isEditing ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-xs text-slate-400">
-                              Amount
-                            </label>
-                            <input
-                              type="number"
-                              value={editAmount}
-                              onChange={(event) =>
-                                setEditAmount(event.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                            />
-                          </div>
+                        <input
+                          type="text"
+                          value={editCategory}
+                          onChange={(event) =>
+                            setEditCategory(event.target.value)
+                          }
+                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                          placeholder="Category"
+                        />
 
-                          <div>
-                            <label className="mb-1 block text-xs text-slate-400">
-                              Category
-                            </label>
-                            <input
-                              type="text"
-                              value={editCategory}
-                              onChange={(event) =>
-                                setEditCategory(event.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                            />
-                          </div>
-                        </div>
+                        <select
+                          value={editTransactionType}
+                          onChange={(event) =>
+                            setEditTransactionType(
+                              event.target.value as "debit" | "credit"
+                            )
+                          }
+                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                        >
+                          <option value="debit">Debit</option>
+                          <option value="credit">Credit</option>
+                        </select>
 
-                        <div>
-                          <label className="mb-1 block text-xs text-slate-400">
-                            Description
-                          </label>
-                          <input
-                            type="text"
-                            value={editDescription}
-                            onChange={(event) =>
-                              setEditDescription(event.target.value)
-                            }
-                            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-1 block text-xs text-slate-400">
-                            Transaction Type
-                          </label>
-                          <select
-                            value={editTransactionType}
-                            onChange={(event) =>
-                              setEditTransactionType(
-                                event.target.value as "debit" | "credit"
-                              )
-                            }
-                            className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                          >
-                            <option value="debit">Debit</option>
-                            <option value="credit">Credit</option>
-                          </select>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => updateExpense(expense.id)}
-                            className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-700"
-                          >
-                            Save
-                          </button>
-
-                          <button
-                            onClick={cancelEditingExpense}
-                            className="flex-1 rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-700"
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                        <input
+                          type="text"
+                          value={editDescription}
+                          onChange={(event) =>
+                            setEditDescription(event.target.value)
+                          }
+                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                          placeholder="Description"
+                        />
                       </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-semibold capitalize">
-                            {expense.category}
-                          </p>
-                          <p className="mt-1 text-sm text-slate-400">
-                            {expense.description}
-                          </p>
-                          <p className="mt-2 text-xs text-slate-500">
-                            {new Date(expense.created_at).toLocaleString()}
-                          </p>
-                        </div>
 
-                        <div className="text-right">
-                          <p
-                            className={`font-bold ${
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={saveEdit}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
+
+                        <button
+                          onClick={cancelEdit}
+                          className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-700"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-lg font-semibold">
+                            {expense.description || "Transaction"}
+                          </p>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs ${
                               expense.transaction_type === "credit"
-                                ? "text-emerald-400"
-                                : "text-rose-400"
+                                ? "bg-emerald-500/10 text-emerald-300"
+                                : "bg-red-500/10 text-red-300"
                             }`}
                           >
-                            {expense.transaction_type === "credit" ? "+" : "-"}$
-                            {Number(expense.amount).toFixed(2)}
-                          </p>
-
-                          <p className="mt-1 text-xs capitalize text-slate-400">
                             {expense.transaction_type}
-                          </p>
-
-                          <div className="mt-3 flex justify-end gap-2">
-                            <button
-                              onClick={() => startEditingExpense(expense)}
-                              className="rounded-lg border border-blue-500/40 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/10"
-                            >
-                              Edit
-                            </button>
-
-                            <button
-                              onClick={() => deleteExpense(expense.id)}
-                              className="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                            >
-                              Delete
-                            </button>
-                          </div>
+                          </span>
                         </div>
+
+                        <p className="mt-1 text-sm capitalize text-slate-400">
+                          {expense.category} ·{" "}
+                          {new Date(expense.created_at).toLocaleString()}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p
+                          className={`text-xl font-bold ${
+                            expense.transaction_type === "credit"
+                              ? "text-emerald-300"
+                              : "text-red-300"
+                          }`}
+                        >
+                          {expense.transaction_type === "credit" ? "+" : "-"}$
+                          {Number(expense.amount).toFixed(2)}
+                        </p>
+
+                        <button
+                          onClick={() => startEdit(expense)}
+                          className="rounded-lg border border-slate-600 px-3 py-2 text-xs hover:bg-slate-700"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          onClick={() => requestDeleteExpense(expense)}
+                          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          ) : (
-            <p className="text-slate-400">
-              No transactions for this filter. Try using the Chat page to log an
-              expense.
-            </p>
           )}
         </section>
       </div>
+
+      {expenseToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-2xl">
+            <p className="text-sm font-medium text-red-300">
+              Delete Transaction
+            </p>
+
+            <h2 className="mt-2 text-2xl font-bold">Are you sure?</h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              This will permanently delete this transaction:
+            </p>
+
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="font-semibold">
+                {expenseToDelete.description || "Transaction"}
+              </p>
+
+              <p className="mt-1 text-sm capitalize text-slate-400">
+                {expenseToDelete.category} · $
+                {Number(expenseToDelete.amount).toFixed(2)}
+              </p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setExpenseToDelete(null)}
+                disabled={deletingExpense}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeleteExpense}
+                disabled={deletingExpense}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingExpense ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+      <p className="text-sm text-slate-400">{title}</p>
+      <p className="mt-2 text-3xl font-bold">{value}</p>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+    </div>
   );
 }

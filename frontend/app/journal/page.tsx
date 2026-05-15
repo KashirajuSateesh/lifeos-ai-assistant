@@ -1,181 +1,247 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 import AppShell from "@/components/layout/AppShell";
+import Notice, { NoticeType } from "@/components/ui/Notice";
 import {
   deleteJournal as deleteJournalApi,
   getMonthlyJournals,
   getRecentJournals,
   sendChatMessage,
 } from "@/lib/api";
-import {
-  JournalItem,
-  MonthlyJournalsResponse,
-  RecentJournalsResponse,
-} from "@/lib/types";
+import { supabase } from "@/lib/supabase";
 
-const monthOptions = [
-  { label: "January", value: 1 },
-  { label: "February", value: 2 },
-  { label: "March", value: 3 },
-  { label: "April", value: 4 },
-  { label: "May", value: 5 },
-  { label: "June", value: 6 },
-  { label: "July", value: 7 },
-  { label: "August", value: 8 },
-  { label: "September", value: 9 },
-  { label: "October", value: 10 },
-  { label: "November", value: 11 },
-  { label: "December", value: 12 },
-];
+type JournalEntry = {
+  id: string;
+  user_id?: string;
+  entry_text: string;
+  mood?: string | null;
+  tags?: string[] | null;
+  summary?: string | null;
+  entry_date?: string | null;
+  created_at: string;
+};
 
-function getWeekOfMonth(dateString: string) {
-  const date = new Date(`${dateString}T00:00:00`);
-  const day = date.getDate();
-
-  if (day <= 7) return "Week 1";
-  if (day <= 14) return "Week 2";
-  if (day <= 21) return "Week 3";
-  return "Week 4";
-}
-
-function groupJournalsByWeek(journals: JournalItem[]) {
-  const grouped: Record<string, JournalItem[]> = {
-    "Week 1": [],
-    "Week 2": [],
-    "Week 3": [],
-    "Week 4": [],
-  };
-
-  journals.forEach((journal) => {
-    const week = getWeekOfMonth(journal.entry_date);
-    grouped[week].push(journal);
-  });
-
-  return grouped;
-}
-
-function moodBadgeClass(mood?: string | null) {
-  if (mood === "positive") return "bg-emerald-500/20 text-emerald-300";
-  if (mood === "negative") return "bg-rose-500/20 text-rose-300";
-  if (mood === "mixed") return "bg-purple-500/20 text-purple-300";
-  return "bg-slate-700 text-slate-300";
-}
+type WeekGroup = {
+  label: string;
+  entries: JournalEntry[];
+};
 
 export default function JournalPage() {
   const router = useRouter();
+
   const currentDate = new Date();
 
-  const [journalText, setJournalText] = useState("");
-  const [recentJournals, setRecentJournals] =
-    useState<RecentJournalsResponse | null>(null);
-  const [monthlyJournals, setMonthlyJournals] =
-    useState<MonthlyJournalsResponse | null>(null);
+  const [notice, setNotice] = useState<{
+    type: NoticeType;
+    message: string;
+  } | null>(null);
 
+  const [recentJournals, setRecentJournals] = useState<JournalEntry[]>([]);
+  const [weekGroups, setWeekGroups] = useState<WeekGroup[]>([]);
+
+  const [entryText, setEntryText] = useState("");
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
 
-  const [openWeeks, setOpenWeeks] = useState<Record<string, boolean>>({
-    "Week 1": true,
-    "Week 2": false,
-    "Week 3": false,
-    "Week 4": false,
-  });
+  const [expandedWeek, setExpandedWeek] = useState<string | null>("Week 1");
 
-  const [saving, setSaving] = useState(false);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [loadingMonthly, setLoadingMonthly] = useState(false);
+  const [savingJournal, setSavingJournal] = useState(false);
 
-  const groupedJournals = useMemo(() => {
-    return groupJournalsByWeek(monthlyJournals?.journals ?? []);
-  }, [monthlyJournals]);
+  const [journalToDelete, setJournalToDelete] = useState<JournalEntry | null>(
+    null
+  );
+  const [deletingJournal, setDeletingJournal] = useState(false);
 
   async function fetchRecentJournals() {
+    setNotice(null);
     setLoadingRecent(true);
 
     try {
       const data = await getRecentJournals();
-      setRecentJournals(data);
+      setRecentJournals(data.journals ?? []);
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch recent journals.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch recent journals.",
+      });
     } finally {
       setLoadingRecent(false);
     }
   }
 
-  async function fetchMonthlyJournals(year = selectedYear, month = selectedMonth) {
+  async function fetchMonthlyJournalData(year: number, month: number) {
+    setNotice(null);
     setLoadingMonthly(true);
 
     try {
       const data = await getMonthlyJournals(year, month);
-      setMonthlyJournals(data);
+      setWeekGroups(normalizeWeekGroups(data));
     } catch (error) {
       console.error(error);
-      alert("Failed to fetch monthly journals.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch monthly journals.",
+      });
     } finally {
       setLoadingMonthly(false);
     }
   }
 
-  async function saveJournal() {
-    if (journalText.trim().length < 10) {
-      alert("Please write at least 10 characters for a meaningful journal entry.");
+  function normalizeWeekGroups(data: any): WeekGroup[] {
+    const possibleWeeks = data?.weeks ?? data?.week_groups ?? data?.journals_by_week;
+
+    if (Array.isArray(possibleWeeks)) {
+      return possibleWeeks.map((week: any, index: number) => ({
+        label: week.label ?? week.week_label ?? `Week ${index + 1}`,
+        entries: week.entries ?? week.journals ?? [],
+      }));
+    }
+
+    if (possibleWeeks && typeof possibleWeeks === "object") {
+      return Object.entries(possibleWeeks).map(([key, value]) => ({
+        label: key,
+        entries: Array.isArray(value) ? (value as JournalEntry[]) : [],
+      }));
+    }
+
+    const journals = data?.journals ?? [];
+
+    if (Array.isArray(journals)) {
+      const grouped: Record<string, JournalEntry[]> = {
+        "Week 1": [],
+        "Week 2": [],
+        "Week 3": [],
+        "Week 4": [],
+      };
+
+      journals.forEach((journal: JournalEntry) => {
+        const dateValue = journal.entry_date ?? journal.created_at;
+        const day = new Date(dateValue).getDate();
+
+        if (day <= 7) grouped["Week 1"].push(journal);
+        else if (day <= 14) grouped["Week 2"].push(journal);
+        else if (day <= 21) grouped["Week 3"].push(journal);
+        else grouped["Week 4"].push(journal);
+      });
+
+      return Object.entries(grouped).map(([label, entries]) => ({
+        label,
+        entries,
+      }));
+    }
+
+    return [
+      { label: "Week 1", entries: [] },
+      { label: "Week 2", entries: [] },
+      { label: "Week 3", entries: [] },
+      { label: "Week 4", entries: [] },
+    ];
+  }
+
+  async function saveJournalEntry() {
+    setNotice(null);
+
+    if (entryText.trim().length < 10) {
+      setNotice({
+        type: "error",
+        message: "Please write at least 10 characters for a meaningful journal entry.",
+      });
       return;
     }
 
-    setSaving(true);
+    setSavingJournal(true);
 
     try {
-      const data = await sendChatMessage(journalText);
+      const chatResponse = await sendChatMessage(entryText);
 
-      if (data.selected_agent !== "journal_agent") {
-        alert(
-          "The orchestrator did not route this to Journal Agent. Try starting with: Today I felt..."
-        );
+      if (chatResponse.selected_agent !== "journal_agent") {
+        setNotice({
+          type: "info",
+          message:
+            "The message was not routed to Journal Agent. Try starting with: Today I felt...",
+        });
         return;
       }
 
-      setJournalText("");
+      setEntryText("");
+
+      setNotice({
+        type: "success",
+        message: "Journal entry saved successfully.",
+      });
+
       await fetchRecentJournals();
-      await fetchMonthlyJournals();
+      await fetchMonthlyJournalData(selectedYear, selectedMonth);
     } catch (error) {
       console.error(error);
-      alert("Failed to save journal entry.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to save journal entry.",
+      });
     } finally {
-      setSaving(false);
+      setSavingJournal(false);
     }
   }
 
-  async function deleteJournal(journalId: string) {
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this journal entry?"
-    );
+  function requestDeleteJournal(journal: JournalEntry) {
+    setNotice(null);
+    setJournalToDelete(journal);
+  }
 
-    if (!confirmDelete) return;
+  function cancelDeleteJournal() {
+    if (deletingJournal) return;
+    setJournalToDelete(null);
+  }
+
+  async function confirmDeleteJournal() {
+    if (!journalToDelete) return;
+
+    setNotice(null);
+    setDeletingJournal(true);
 
     try {
-      await deleteJournalApi(journalId);
+      await deleteJournalApi(journalToDelete.id);
+
+      setNotice({
+        type: "success",
+        message: "Journal entry deleted successfully.",
+      });
+
+      setJournalToDelete(null);
+
       await fetchRecentJournals();
-      await fetchMonthlyJournals();
+      await fetchMonthlyJournalData(selectedYear, selectedMonth);
     } catch (error) {
       console.error(error);
-      alert("Failed to delete journal entry.");
+
+      setNotice({
+        type: "error",
+        message: "Failed to delete journal entry.",
+      });
+    } finally {
+      setDeletingJournal(false);
     }
   }
 
-  function toggleWeek(week: string) {
-    setOpenWeeks((previous) => ({
-      ...previous,
-      [week]: !previous[week],
-    }));
+  function handleYearChange(value: string) {
+    const year = Number(value);
+    setSelectedYear(year);
+    fetchMonthlyJournalData(year, selectedMonth);
   }
 
-  async function handleMonthSearch() {
-    await fetchMonthlyJournals(selectedYear, selectedMonth);
+  function handleMonthChange(value: string) {
+    const month = Number(value);
+    setSelectedMonth(month);
+    fetchMonthlyJournalData(selectedYear, month);
   }
 
   useEffect(() => {
@@ -190,7 +256,7 @@ export default function JournalPage() {
       }
 
       await fetchRecentJournals();
-      await fetchMonthlyJournals(
+      await fetchMonthlyJournalData(
         currentDate.getFullYear(),
         currentDate.getMonth() + 1
       );
@@ -199,11 +265,30 @@ export default function JournalPage() {
     loadPage();
   }, []);
 
-  const years = Array.from({ length: 6 }, (_, index) => currentDate.getFullYear() - index);
+  const years = [
+    currentDate.getFullYear(),
+    currentDate.getFullYear() - 1,
+    currentDate.getFullYear() - 2,
+  ];
+
+  const months = [
+    { label: "January", value: 1 },
+    { label: "February", value: 2 },
+    { label: "March", value: 3 },
+    { label: "April", value: 4 },
+    { label: "May", value: 5 },
+    { label: "June", value: 6 },
+    { label: "July", value: 7 },
+    { label: "August", value: 8 },
+    { label: "September", value: 9 },
+    { label: "October", value: 10 },
+    { label: "November", value: 11 },
+    { label: "December", value: 12 },
+  ];
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold">Daily Journal</h1>
           <p className="mt-2 text-slate-400">
@@ -211,49 +296,50 @@ export default function JournalPage() {
           </p>
         </div>
 
+        {notice && <Notice type={notice.type} message={notice.message} />}
+
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-4">
-            <h2 className="text-2xl font-bold">Write Today&apos;s Journal</h2>
-            <p className="mt-2 text-slate-400">
-              Write freely. 100–300+ characters is completely fine.
+            <h2 className="text-2xl font-bold">Write Journal</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Write naturally. LifeOS will save it and generate mood, tags, and summary.
             </p>
           </div>
 
           <textarea
-            value={journalText}
-            onChange={(event) => setJournalText(event.target.value)}
-            placeholder="Example: Today I felt productive but tired. I worked on my AI assistant project and made good progress..."
-            className="min-h-48 w-full rounded-xl border border-slate-700 bg-slate-800 p-4 text-white outline-none focus:border-blue-500"
+            value={entryText}
+            onChange={(event) => setEntryText(event.target.value)}
+            placeholder="Example: Today was tiring, but I felt proud because I made progress on my project..."
+            className="min-h-40 w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-white outline-none focus:border-blue-500"
           />
 
-          <div className="mt-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <p className="text-sm text-slate-400">
-              Characters: {journalText.length}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">
+              {entryText.length} characters
             </p>
 
             <button
-              onClick={saveJournal}
-              disabled={saving}
+              onClick={saveJournalEntry}
+              disabled={savingJournal}
               className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save Journal"}
+              {savingJournal ? "Saving..." : "Save Journal"}
             </button>
           </div>
         </section>
 
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-              <p className="text-sm font-medium text-blue-400">Recent</p>
-              <h2 className="text-2xl font-bold">Recent 5 Journals</h2>
-              <p className="mt-2 text-slate-400">
-                Your latest reflections, mood, tags, and summaries.
+              <h2 className="text-2xl font-bold">Recent Journals</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Your latest 5 journal entries.
               </p>
             </div>
 
             <button
               onClick={fetchRecentJournals}
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+              className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
             >
               Refresh
             </button>
@@ -261,79 +347,35 @@ export default function JournalPage() {
 
           {loadingRecent ? (
             <p className="text-slate-400">Loading recent journals...</p>
-          ) : recentJournals && recentJournals.journals.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {recentJournals.journals.map((journal) => (
-                <div
+          ) : recentJournals.length === 0 ? (
+            <p className="text-slate-400">No recent journals found.</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {recentJournals.slice(0, 5).map((journal) => (
+                <JournalCard
                   key={journal.id}
-                  className="rounded-2xl border border-slate-700 bg-slate-800 p-5"
-                >
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">
-                        {new Date(`${journal.entry_date}T00:00:00`).toDateString()}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        Created: {new Date(journal.created_at).toLocaleString()}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs capitalize ${moodBadgeClass(
-                        journal.mood
-                      )}`}
-                    >
-                      {journal.mood ?? "neutral"}
-                    </span>
-                  </div>
-
-                  <p className="text-sm leading-6 text-slate-300">
-                    {journal.summary ?? journal.entry_text}
-                  </p>
-
-                  {journal.tags && journal.tags.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {journal.tags.map((tag) => (
-                        <span
-                          key={`${journal.id}-${tag}`}
-                          className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => deleteJournal(journal.id)}
-                    className="mt-4 rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                  >
-                    Delete
-                  </button>
-                </div>
+                  journal={journal}
+                  onDelete={requestDeleteJournal}
+                />
               ))}
             </div>
-          ) : (
-            <p className="text-slate-400">No recent journals yet.</p>
           )}
         </section>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5">
-            <p className="text-sm font-medium text-blue-400">Monthly View</p>
-            <h2 className="text-2xl font-bold">Browse by Year, Month, and Week</h2>
-            <p className="mt-2 text-slate-400">
-              Select a month to view daily journal cards grouped into weeks.
-            </p>
-          </div>
-
-          <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
-              <label className="mb-1 block text-sm text-slate-400">Year</label>
+              <h2 className="text-2xl font-bold">Browse by Month</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Select year and month, then expand each week.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
               <select
                 value={selectedYear}
-                onChange={(event) => setSelectedYear(Number(event.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                onChange={(event) => handleYearChange(event.target.value)}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               >
                 {years.map((year) => (
                   <option key={year} value={year}>
@@ -341,30 +383,18 @@ export default function JournalPage() {
                   </option>
                 ))}
               </select>
-            </div>
 
-            <div>
-              <label className="mb-1 block text-sm text-slate-400">Month</label>
               <select
                 value={selectedMonth}
-                onChange={(event) => setSelectedMonth(Number(event.target.value))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                onChange={(event) => handleMonthChange(event.target.value)}
+                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
               >
-                {monthOptions.map((month) => (
+                {months.map((month) => (
                   <option key={month.value} value={month.value}>
                     {month.label}
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={handleMonthSearch}
-                className="w-full rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600"
-              >
-                Load Month
-              </button>
             </div>
           </div>
 
@@ -372,96 +402,156 @@ export default function JournalPage() {
             <p className="text-slate-400">Loading monthly journals...</p>
           ) : (
             <div className="space-y-3">
-              {["Week 1", "Week 2", "Week 3", "Week 4"].map((week) => (
-                <div
-                  key={week}
-                  className="rounded-xl border border-slate-700 bg-slate-800"
-                >
-                  <button
-                    onClick={() => toggleWeek(week)}
-                    className="flex w-full items-center justify-between px-4 py-4 text-left"
+              {weekGroups.map((week) => {
+                const isOpen = expandedWeek === week.label;
+
+                return (
+                  <div
+                    key={week.label}
+                    className="rounded-xl border border-slate-700 bg-slate-800"
                   >
-                    <div>
-                      <p className="font-semibold">{week}</p>
-                      <p className="text-sm text-slate-400">
-                        {groupedJournals[week].length} journal(s)
-                      </p>
-                    </div>
-
-                    <span className="text-slate-400">
-                      {openWeeks[week] ? "−" : "+"}
-                    </span>
-                  </button>
-
-                  {openWeeks[week] && (
-                    <div className="border-t border-slate-700 p-4">
-                      {groupedJournals[week].length > 0 ? (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {groupedJournals[week].map((journal) => (
-                            <div
-                              key={journal.id}
-                              className="rounded-xl border border-slate-700 bg-slate-900 p-4"
-                            >
-                              <div className="mb-2 flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="font-semibold">
-                                    {new Date(
-                                      `${journal.entry_date}T00:00:00`
-                                    ).toDateString()}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {new Date(journal.created_at).toLocaleString()}
-                                  </p>
-                                </div>
-
-                                <span
-                                  className={`rounded-full px-3 py-1 text-xs capitalize ${moodBadgeClass(
-                                    journal.mood
-                                  )}`}
-                                >
-                                  {journal.mood ?? "neutral"}
-                                </span>
-                              </div>
-
-                              <p className="text-sm leading-6 text-slate-300">
-                                {journal.entry_text}
-                              </p>
-
-                              {journal.tags && journal.tags.length > 0 && (
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {journal.tags.map((tag) => (
-                                    <span
-                                      key={`${journal.id}-${tag}`}
-                                      className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
-                                    >
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              <button
-                                onClick={() => deleteJournal(journal.id)}
-                                className="mt-4 rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
+                    <button
+                      onClick={() =>
+                        setExpandedWeek(isOpen ? null : week.label)
+                      }
+                      className="flex w-full items-center justify-between px-4 py-4 text-left"
+                    >
+                      <div>
+                        <p className="font-semibold">{week.label}</p>
                         <p className="text-sm text-slate-400">
-                          No journal entries for this week.
+                          {week.entries.length} entries
                         </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                      </div>
+
+                      <span className="text-slate-400">
+                        {isOpen ? "Hide" : "Show"}
+                      </span>
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-slate-700 p-4">
+                        {week.entries.length === 0 ? (
+                          <p className="text-sm text-slate-400">
+                            No journal entries for this week.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            {week.entries.map((journal) => (
+                              <JournalCard
+                                key={journal.id}
+                                journal={journal}
+                                onDelete={requestDeleteJournal}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
       </div>
+
+      {journalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 text-white shadow-2xl">
+            <p className="text-sm font-medium text-red-300">
+              Delete Journal Entry
+            </p>
+
+            <h2 className="mt-2 text-2xl font-bold">Are you sure?</h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              This will permanently delete this journal entry. This action cannot be undone.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+              <p className="font-semibold">
+                {journalToDelete.summary || "Journal Entry"}
+              </p>
+
+              <p className="mt-2 line-clamp-3 text-sm text-slate-400">
+                {journalToDelete.entry_text}
+              </p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={cancelDeleteJournal}
+                disabled={deletingJournal}
+                className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={confirmDeleteJournal}
+                disabled={deletingJournal}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-700 disabled:opacity-60"
+              >
+                {deletingJournal ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
+  );
+}
+
+function JournalCard({
+  journal,
+  onDelete,
+}: {
+  journal: JournalEntry;
+  onDelete: (journal: JournalEntry) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-blue-500/10 px-3 py-1 text-xs capitalize text-blue-300">
+            {journal.mood || "neutral"}
+          </span>
+
+          <span className="text-xs text-slate-500">
+            {journal.entry_date
+              ? new Date(journal.entry_date).toLocaleDateString()
+              : new Date(journal.created_at).toLocaleDateString()}
+          </span>
+        </div>
+
+        <button
+          onClick={() => onDelete(journal)}
+          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+        >
+          Delete
+        </button>
+      </div>
+
+      <p className="font-semibold">
+        {journal.summary || "Journal entry saved."}
+      </p>
+
+      <p className="mt-2 line-clamp-4 text-sm text-slate-400">
+        {journal.entry_text}
+      </p>
+
+      {journal.tags && journal.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {journal.tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300"
+            >
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
