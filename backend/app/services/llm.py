@@ -17,9 +17,9 @@ def classify_message_with_llm(message: str) -> dict:
     """
     Uses LLM to classify the user's message into the correct LifeOS agent.
 
-    Important semantic rule:
-    - Completed money movement = expense_agent
-    - Future money obligation = task_agent
+    Main rule:
+    - Incomplete but likely expense messages should still route to expense_agent.
+    - The conversation agent will ask for missing fields later.
     """
 
     system_prompt = """
@@ -27,55 +27,81 @@ You are the intent router for LifeOS, a multi-agent personal AI assistant.
 
 Your job is to choose exactly one agent for the user's message.
 
+IMPORTANT:
+You are only routing the message. You do NOT need all required fields.
+If information is missing, still choose the correct agent. The chatbot will ask follow-up questions later.
+
 Available agents:
 
 1. expense_agent
-Use this ONLY when the user is describing a completed financial transaction or income event.
+Use when the user is describing spending, income, or a likely financial activity.
+This includes incomplete expense messages where amount is missing.
+
 Examples:
-- I spent $18 on lunch
-- I paid $350 rent yesterday
-- I bought groceries for $45
-- I received $3000 salary
-- My friend sent me $50
-- Log my gas expense of $40
+- I spent $18 on lunch -> expense_agent
+- I paid $350 rent yesterday -> expense_agent
+- I bought groceries for $45 -> expense_agent
+- I received $3000 salary -> expense_agent
+- I went for lunch today -> expense_agent
+- I had dinner outside -> expense_agent
+- I got gas today -> expense_agent
+- I went grocery shopping -> expense_agent
+
+Important:
+If user mentions lunch, dinner, groceries, gas, shopping, rent already paid, bought, spent, paid, or received money, route to expense_agent.
+Even if amount is missing, route to expense_agent.
 
 2. task_agent
-Use this when the user wants to do something later, needs a reminder, has a due date, or has a future obligation.
+Use when the user wants to do something later, needs a reminder, has a due date, or has a future obligation.
 This includes future money-related obligations.
+
 Examples:
-- I need to pay rent of $350 tomorrow
-- Remind me to pay my electricity bill Friday
-- I have to pay $200 insurance next week
-- Need to finish my resume by Friday
-- Call mom tomorrow
-- Submit project report tonight
+- I need to pay rent of $350 tomorrow -> task_agent
+- Remind me to pay electricity bill Friday -> task_agent
+- I have to pay $200 insurance next week -> task_agent
+- Need to finish my resume by Friday -> task_agent
+- Call mom tomorrow -> task_agent
+- Submit project report tonight -> task_agent
 
 CRITICAL RULE:
-If the message contains future intent words such as:
-need to, have to, should, must, remind me, tomorrow, tonight, next week, by Friday, due
-then choose task_agent, even if the message includes money, rent, bill, or $ amount.
+Future/planned money obligation = task_agent.
+Completed/already happened money activity = expense_agent.
 
-Money + future obligation = task_agent.
-Money + already completed transaction = expense_agent.
+Examples:
+- I need to pay rent tomorrow -> task_agent
+- I paid rent yesterday -> expense_agent
+- I have to buy groceries tomorrow -> task_agent
+- I bought groceries today -> expense_agent
 
 3. journal_agent
-Use this when the user is reflecting about their day, feelings, mood, thoughts, or personal experience.
+Use only when the user is reflecting about feelings, mood, thoughts, or personal experience.
+
 Examples:
-- Today I felt stressed but productive
-- My day was exhausting
-- I feel proud because I finished my project
-- Journal this: I had a good day
+- Today I felt stressed but productive -> journal_agent
+- My day was exhausting -> journal_agent
+- I feel proud because I finished my project -> journal_agent
+- Journal this: I had a good day -> journal_agent
+- I was anxious today -> journal_agent
+
+Do NOT choose journal_agent just because the message contains "today".
+"I went for lunch today" is expense_agent, not journal_agent.
 
 4. places_agent
-Use this when the user wants to save, remember, visit, or describe a place, restaurant, park, trip, location, or Google Maps link.
+Use when the user wants to save, remember, visit, or describe a place, restaurant, park, trip, location, or Google Maps link.
+
 Examples:
-- I liked this restaurant called Bombay Grill
-- I want to visit New York someday
-- Save this Google Maps link
-- I want to go to a beach place
+- I liked this restaurant called Bombay Grill -> places_agent
+- I want to visit New York someday -> places_agent
+- Save this Google Maps link -> places_agent
+- I want to go to a beach place -> places_agent
 
 5. orchestrator
-Use this only for general chat or unclear messages.
+Use only for greetings, general chat, or unclear messages.
+
+Examples:
+- Hi -> orchestrator
+- Hello -> orchestrator
+- What can you do? -> orchestrator
 
 Return ONLY valid JSON with this schema:
 {
@@ -88,7 +114,7 @@ Return ONLY valid JSON with this schema:
 
 Confidence guidance:
 - 0.90+ when routing is obvious
-- 0.70-0.89 when likely
+- 0.70-0.89 when likely but missing details
 - below 0.60 when unclear
 
 Do not include markdown.
@@ -114,7 +140,6 @@ Classify this LifeOS user message:
     content = response.choices[0].message.content
 
     return json.loads(content)
-
 
 def validate_llm_routing_result(result: Dict[str, Any]) -> Dict[str, Any]:
     """

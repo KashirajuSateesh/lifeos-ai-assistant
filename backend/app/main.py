@@ -59,6 +59,7 @@ from app.services.database import (
     update_profile_by_user,
     delete_all_user_app_data,
 )
+from app.agents.conversation_agent import handle_conversational_chat
 
 app = FastAPI(
     title="LifeOS AI Assistant API",
@@ -158,24 +159,34 @@ def chat(
     request: ChatRequest,
     authenticated_user_id: str = Depends(get_authenticated_user_id),
 ):
-    graph_result = run_lifeos_graph(
+    result = handle_conversational_chat(
         message=request.message,
         user_id=authenticated_user_id,
     )
 
-    return ChatResponse(
-        status="success",
-        user_id=authenticated_user_id,
-        message_received=request.message,
-        intent=graph_result.get("intent"),
-        selected_agent=graph_result.get("selected_agent"),
-        extracted_data=graph_result.get("extracted_data"),
-        response=graph_result.get("response"),
-        confidence=graph_result.get("confidence"),
-        routing_source=graph_result.get("routing_source"),
-        routing_reason=graph_result.get("routing_reason"),
-    )
+    assistant_message = result.get("assistant_message", "")
 
+    return {
+        # Required old fields for ChatResponse model
+        "message_received": request.message,
+        "response": assistant_message,
+
+        # New conversational fields
+        "status": "success",
+        "user_id": authenticated_user_id,
+        "message": request.message,
+        "assistant_message": assistant_message,
+        "conversation_status": result.get("conversation_status"),
+        "selected_agent": result.get("selected_agent"),
+        "intent": result.get("intent"),
+        "collected_data": result.get("collected_data", {}),
+        "missing_fields": result.get("missing_fields", []),
+        "pending_action": result.get("pending_action"),
+        "confirmation_card": result.get("confirmation_card"),
+        "agent_result": result.get("agent_result"),
+        "routing_source": result.get("routing_source"),
+        "routing_reason": result.get("routing_reason"),
+    }
 
 # -------------------------
 # Expenses - Authenticated

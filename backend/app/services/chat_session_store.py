@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from app.services.database import supabase
+from app.services.database import get_supabase_client
 
 
 def utc_now_iso() -> str:
@@ -13,6 +13,8 @@ def get_active_chat_session(user_id: str) -> Optional[Dict[str, Any]]:
     Get the active chat session for a user.
     For now, we keep one active session per user.
     """
+
+    supabase = get_supabase_client()
 
     result = (
         supabase.table("chat_sessions")
@@ -35,12 +37,16 @@ def create_chat_session(user_id: str) -> Dict[str, Any]:
     Create a new active chat session.
     """
 
+    supabase = get_supabase_client()
+
     session_data = {
         "user_id": user_id,
         "conversation_state": {
             "last_messages": [],
             "current_intent": None,
             "selected_agent": None,
+            "collected_data": {},
+            "missing_fields": [],
         },
         "pending_action": None,
         "status": "active",
@@ -76,6 +82,8 @@ def update_chat_session(
     Update chat session state.
     """
 
+    supabase = get_supabase_client()
+
     update_data: Dict[str, Any] = {
         "updated_at": utc_now_iso(),
     }
@@ -83,8 +91,10 @@ def update_chat_session(
     if conversation_state is not None:
         update_data["conversation_state"] = conversation_state
 
-    if pending_action is not None:
-        update_data["pending_action"] = pending_action
+    # Important:
+    # pending_action can be None when we want to clear it.
+    # So we always include it if this function receives the parameter.
+    update_data["pending_action"] = pending_action
 
     if status is not None:
         update_data["status"] = status
@@ -103,6 +113,8 @@ def clear_pending_action(session_id: str) -> Dict[str, Any]:
     """
     Clear the pending action after save/cancel.
     """
+
+    supabase = get_supabase_client()
 
     result = (
         supabase.table("chat_sessions")
