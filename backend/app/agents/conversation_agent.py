@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from app.agents.expense_agent import handle_expense_message
@@ -13,6 +13,7 @@ from app.services.chat_session_store import (
     set_conversation_focus,
     update_chat_session,
 )
+from app.services.database import get_supabase_client
 from app.services.llm import client, OPENAI_MODEL
 
 
@@ -40,7 +41,21 @@ def is_no(message: str) -> bool:
 
 def is_greeting(message: str) -> bool:
     normalized = normalize_message(message)
-    return normalized in {"hi", "hello", "hey", "hii", "good morning", "good evening"}
+
+    greeting_words = {
+        "hi",
+        "hii",
+        "hiii",
+        "hello",
+        "helo",
+        "hey",
+        "heyy",
+        "good morning",
+        "good afternoon",
+        "good evening",
+    }
+
+    return normalized in greeting_words
 
 
 def extract_amount_from_text(message: str) -> Optional[float]:
@@ -389,6 +404,279 @@ def handle_expense_conversation(
         "confirmation_card": confirmation_card,
     }
 
+def is_expense_query(message: str) -> bool:
+    """
+    Detects questions about already saved expenses.
+    This is not a create flow.
+    """
+
+    normalized = normalize_message(message)
+
+    expense_words = [
+        "expense",
+        "expenses",
+        "spend",
+        "spent",
+        "spending",
+        "logged",
+        "loged",
+        "money",
+        "transactions",
+        "transaction",
+    ]
+
+    query_words = [
+        "what",
+        "show",
+        "how much",
+        "list",
+        "tell me",
+        "did i",
+        "this month",
+        "today",
+        "this week",
+        "this year",
+    ]
+
+    has_expense_word = any(word in normalized for word in expense_words)
+    has_query_word = any(word in normalized for word in query_words)
+
+    return has_expense_word and has_query_word
+
+
+def get_period_range(period: str) -> tuple[str, str]:
+    """
+    Returns ISO datetime range for expense filtering.
+    """
+
+    now = datetime.now(timezone.utc)
+
+    if period == "today":
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+
+    elif period == "this_week":
+        start = now - timedelta(days=now.weekday())
+        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=7)
+
+    elif period == "this_year":
+        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = start.replace(year=start.year + 1)
+
+    else:
+        # default: this_month
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        if start.month == 12:
+            end = start.replace(year=start.year + 1, month=1)
+        else:
+            end = start.replace(month=start.month + 1)
+
+    return start.isoformat(), end.isoformat()
+
+
+def extract_expense_query_with_llm(message: str) -> Dict[str, Any]:
+    """
+    Uses LLM to understand expense query period/category.
+    This is for read-only expense questions.
+    """
+
+    system_prompt = """
+You are helping LifeOS understand a user's question about saved expenses.
+
+Extract:
+- period: today | this_week | this_month | this_year | all
+- category: food | groceries | transport | rent | utilities | health | entertainment | shopping | income | other | all
+- query_type: summary | list
+
+Rules:
+- If user asks "this month", period is this_month.
+- If user asks "today", period is today.
+- If user asks "this week", period is this_week.
+- If no period is clear, use this_month.
+- If no category is clear, use all.
+- If user asks "what expenses" or "how much", query_type is summary.
+- If user asks "show/list", query_type is list.
+
+Return ONLY valid JSON:
+{
+  "period": "today | this_week | this_month | this_year | all",
+  "category": "string",
+  "query_type": "summary | list"
+}
+"""
+
+    user_prompt = f"""
+User expense question:
+"{message}"
+"""
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+
+    return json.loads(response.choices[0].message.content)
+
+
+def summarize_expenses_for_chat(message: str, user_id: str) -> Dict[str, Any]:
+    """
+    Read saved expenses and return a friendly chatbot answer.
+    Does not create/update/delete anything.
+    """
+
+    try:
+        query_info = extract_expense_query_with_llm(message)
+    except Exception as error:
+        print("EXPENSE QUERY LLM ERROR:")
+        print(error)
+
+        query_info = {
+            "period": "this_month",
+            "category": "all",
+            "query_type": "summary",
+        }
+
+    period = query_info.get("period", "this_month")
+    category = query_info.get("category", "all")
+    query_type = query_info.get("query_type", "summary")
+
+    supabase = get_supabase_client()
+
+    query = (
+        supabase.table("expenses")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+    )
+
+    if period != "all":
+        start_date, end_date = get_period_range(period)
+        query = query.gte("created_at", start_date).lt("created_at", end_date)
+
+    if category and category != "all":
+        query = query.eq("category", category)
+
+    result = query.execute()
+    expenses = result.data or []
+
+    if not expenses:
+        period_text = period.replace("_", " ")
+        return {
+            "assistant_message": f"I did not find any expenses for {period_text}.",
+            "conversation_status": "general_response",
+            "selected_agent": "expense_agent",
+            "intent": "expense_query",
+            "collected_data": {
+                "period": period,
+                "category": category,
+                "count": 0,
+                "total_debit": 0,
+                "total_credit": 0,
+                "net_balance": 0,
+            },
+            "missing_fields": [],
+            "pending_action": None,
+            "confirmation_card": None,
+        }
+
+    total_debit = 0.0
+    total_credit = 0.0
+    category_totals: Dict[str, float] = {}
+
+    for expense in expenses:
+        amount = float(expense.get("amount") or 0)
+        transaction_type = expense.get("transaction_type") or "debit"
+        expense_category = expense.get("category") or "other"
+
+        if transaction_type == "credit":
+            total_credit += amount
+        else:
+            total_debit += amount
+            category_totals[expense_category] = (
+                category_totals.get(expense_category, 0.0) + amount
+            )
+
+    net_balance = total_credit - total_debit
+
+    top_category = None
+    if category_totals:
+        top_category = max(category_totals.items(), key=lambda item: item[1])
+
+    period_text = period.replace("_", " ")
+
+    if query_type == "list":
+        recent_items = expenses[:5]
+
+        item_lines = []
+        for item in recent_items:
+            description = item.get("description") or "Expense"
+            amount = float(item.get("amount") or 0)
+            item_category = item.get("category") or "other"
+            item_lines.append(f"- {description}: ${amount:.2f} ({item_category})")
+
+        assistant_message = (
+            f"Here are your recent expenses for {period_text}:\n"
+            + "\n".join(item_lines)
+        )
+
+    else:
+        assistant_message = (
+            f"For {period_text}, you logged {len(expenses)} transaction(s). "
+            f"Money out is ${total_debit:.2f}, money in is ${total_credit:.2f}, "
+            f"and net balance is ${net_balance:.2f}."
+        )
+
+        if top_category:
+            assistant_message += (
+                f" Your biggest spending category was {top_category[0]} "
+                f"with ${top_category[1]:.2f}."
+            )
+
+    confirmation_card = {
+        "title": "Expense Summary",
+        "fields": [
+            {"label": "Period", "value": period_text.title()},
+            {"label": "Transactions", "value": str(len(expenses))},
+            {"label": "Money Out", "value": f"${total_debit:.2f}"},
+            {"label": "Money In", "value": f"${total_credit:.2f}"},
+            {"label": "Net Balance", "value": f"${net_balance:.2f}"},
+        ],
+    }
+
+    if top_category:
+        confirmation_card["fields"].append(
+            {
+                "label": "Top Category",
+                "value": f"{top_category[0].title()} (${top_category[1]:.2f})",
+            }
+        )
+
+    return {
+        "assistant_message": assistant_message,
+        "conversation_status": "general_response",
+        "selected_agent": "expense_agent",
+        "intent": "expense_query",
+        "collected_data": {
+            "period": period,
+            "category": category,
+            "count": len(expenses),
+            "total_debit": total_debit,
+            "total_credit": total_credit,
+            "net_balance": net_balance,
+            "top_category": top_category[0] if top_category else None,
+        },
+        "missing_fields": [],
+        "pending_action": None,
+        "confirmation_card": confirmation_card,
+    }
+
 
 def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
     """
@@ -419,6 +707,25 @@ def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
     # If waiting for confirmation, handle yes/no first.
     if session.get("pending_action"):
         return handle_pending_confirmation(message, session, user_id)
+    
+    if is_expense_query(message):
+        response = summarize_expenses_for_chat(
+            message=message,
+            user_id=user_id,
+        )
+
+        conversation_state = append_message_to_state(
+            conversation_state,
+            "assistant",
+            response["assistant_message"],
+        )
+
+        update_chat_session(
+            session_id=session["id"],
+            conversation_state=conversation_state,
+        )
+
+        return response
 
     if is_greeting(message):
         response = friendly_response(message)
