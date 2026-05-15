@@ -58,11 +58,28 @@ function formatAgentName(agent?: string) {
   return agent.replace("_agent", "").replace("_", " ");
 }
 
-export default function ChatPage() {
-  const router = useRouter();
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+const CHAT_STORAGE_KEY = "lifeos_chat_messages";
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
+function getInitialChatMessages(): ChatMessage[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const storedMessages = window.sessionStorage.getItem(CHAT_STORAGE_KEY);
+
+    if (storedMessages) {
+      const parsedMessages = JSON.parse(storedMessages) as ChatMessage[];
+
+      if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+        return parsedMessages;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load chat messages from sessionStorage:", error);
+  }
+
+  return [
     {
       id: createMessageId(),
       role: "assistant",
@@ -73,7 +90,14 @@ export default function ChatPage() {
       selectedAgent: "orchestrator",
       intent: "general_chat",
     },
-  ]);
+  ];
+}
+
+export default function ChatPage() {
+  const router = useRouter();
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const [input, setInput] = useState("");
   const [notice, setNotice] = useState<{
@@ -88,6 +112,20 @@ export default function ChatPage() {
       behavior: "smooth",
     });
   }
+
+  useEffect(() => {
+    setMessages(getInitialChatMessages());
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    try {
+      window.sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+    } catch (error) {
+      console.error("Failed to save chat messages to sessionStorage:", error);
+    }
+  }, [messages]);
 
   useEffect(() => {
     scrollToBottom();
@@ -216,7 +254,7 @@ export default function ChatPage() {
       });
     }
 
-    setMessages([
+    const clearedMessages: ChatMessage[] = [
       {
         id: createMessageId(),
         role: "assistant",
@@ -226,8 +264,10 @@ export default function ChatPage() {
         selectedAgent: "orchestrator",
         intent: "general_chat",
       },
-    ]);
+    ];
 
+    setMessages(clearedMessages);
+    window.sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(clearedMessages));
     setInput("");
   }
 

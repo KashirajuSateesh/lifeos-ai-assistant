@@ -26,14 +26,15 @@ export default function Sidebar() {
       console.error("Failed to reset chat session on logout:", error);
     }
 
+    window.sessionStorage.removeItem("lifeos_chat_messages");
+
     await supabase.auth.signOut();
-    router.push("/login");
   }
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-screen w-72 border-r border-slate-800/70 bg-slate-950/95 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl md:flex md:flex-col">
-      <div className="mb-8">
-        <div className="flex items-center gap-3">
+      <div className="mb-4">
+        <div className="flex items-center gap-5">
           <img
             src="/lifeos-logo.png"
             alt="LifeOS Logo"
@@ -43,15 +44,11 @@ export default function Sidebar() {
             }}
           />
 
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">LifeOS</h1>
-            <p className="text-xs text-blue-400">Personal AI Assistant</p>
+          <div className="space-y-1">
+            <h1 className="text-4xl font-extrabold tracking-tight">LifeOS</h1>
+            <p className="text-sm text-blue-400">Personal AI Assistant</p>
           </div>
         </div>
-
-        <p className="mt-3 text-xs text-slate-500">
-          Expenses, tasks, journals, and places.
-        </p>
 
       </div>
 

@@ -30,8 +30,9 @@ export default function BottomNav() {
       console.error("Failed to reset chat session on logout:", error);
     }
 
+    window.sessionStorage.removeItem("lifeos_chat_messages");
+
     await supabase.auth.signOut();
-    router.push("/login");
   }
 
   return (

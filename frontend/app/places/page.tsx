@@ -244,6 +244,30 @@ export default function PlacesPage() {
     );
   }
 
+  async function refreshPlacesPage() {
+    setNotice(null);
+
+    setNearbyPlaces(null);
+    setNearbyLoading(false);
+
+    const data = await getPlaces({
+      status: selectedStatus,
+      category: selectedCategory,
+    });
+
+    const cleanedPlaces = data.places.map((place) => ({
+      ...place,
+      distance_km: null,
+    }));
+
+    setPlacesData({
+      ...data,
+      places: cleanedPlaces,
+    });
+
+    await fetchPlaceSuggestions();
+  }
+
   async function handleStatusChange(status: PlaceStatusFilter) {
     setSelectedStatus(status);
     await fetchPlaces(status, selectedCategory);
@@ -412,7 +436,7 @@ export default function PlacesPage() {
 
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => fetchPlaces(selectedStatus, selectedCategory)}
+                onClick={refreshPlacesPage}
                 className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
               >
                 Refresh
