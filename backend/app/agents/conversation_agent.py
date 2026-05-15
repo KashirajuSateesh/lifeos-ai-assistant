@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 from app.agents.expense_agent import handle_expense_message
 from app.agents.task_agent import handle_task_message
 from app.agents.places_agent import handle_places_message
+from app.agents.journal_agent import handle_journal_message
+
 from app.agents.orchestrator import classify_intent
 from app.services.chat_session_store import (
     append_message_to_state,
@@ -214,6 +216,31 @@ def build_confirmation_card(action_type: str, data: Dict[str, Any]) -> Dict[str,
                         or data.get("description")
                         or "Not provided"
                     ),
+                },
+            ],
+        }
+    
+    if action_type == "journal_create":
+        return {
+            "title": "Journal Entry",
+            "fields": [
+                {
+                    "label": "Mood",
+                    "value": str(data.get("mood", "neutral")).title(),
+                },
+                {
+                    "label": "Summary",
+                    "value": str(data.get("summary", "Journal entry")),
+                },
+                {
+                    "label": "Tags",
+                    "value": ", ".join(data.get("tags", []))
+                    if isinstance(data.get("tags"), list)
+                    else str(data.get("tags") or "None"),
+                },
+                {
+                    "label": "Entry",
+                    "value": str(data.get("entry_text", ""))[:200],
                 },
             ],
         }
@@ -977,6 +1004,54 @@ def handle_pending_confirmation(
                 "confirmation_card": build_confirmation_card("place_create", data),
                 "agent_result": agent_result,
             }
+        
+        if action_type == "journal_create":
+            entry_text = data.get("entry_text") or ""
+            mood = data.get("mood") or "neutral"
+            summary = data.get("summary") or "Journal entry"
+            tags = data.get("tags") or []
+
+            journal_message_parts = [
+                entry_text,
+                f"Mood: {mood}",
+                f"Summary: {summary}",
+            ]
+
+            if tags:
+                journal_message_parts.append(f"Tags: {', '.join(tags)}")
+
+            journal_message = ". ".join(journal_message_parts)
+
+            agent_result = handle_journal_message(
+                journal_message,
+                data,
+                user_id=user_id,
+            )
+
+            conversation_state = append_message_to_state(
+                conversation_state,
+                "user",
+                message,
+            )
+            conversation_state = reset_conversation_focus(conversation_state)
+
+            update_chat_session(
+                session_id=session["id"],
+                conversation_state=conversation_state,
+                pending_action=None,
+            )
+
+            return {
+                "assistant_message": "Done, I saved it to your journal.",
+                "conversation_status": "saved",
+                "selected_agent": "journal_agent",
+                "intent": "journal_create",
+                "collected_data": data,
+                "missing_fields": [],
+                "pending_action": None,
+                "confirmation_card": build_confirmation_card("journal_create", data),
+                "agent_result": agent_result,
+            }
 
         return {
             "assistant_message": "I found a pending action, but I do not know how to save this type yet.",
@@ -1448,6 +1523,220 @@ def handle_place_conversation(
         "confirmation_card": confirmation_card,
     }
 
+def create_journal_pending_action(collected_data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "type": "journal_create",
+        "selected_agent": "journal_agent",
+        "intent": "journal_create",
+        "status": "awaiting_confirmation",
+        "data": {
+            "entry_text": collected_data.get("entry_text") or "",
+            "mood": collected_data.get("mood") or "neutral",
+            "summary": collected_data.get("summary") or "Journal entry",
+            "tags": collected_data.get("tags") or [],
+            "created_at": utc_now_iso(),
+        },
+    }
+
+def extract_journal_conversation_with_llm(
+    message: str,
+    conversation_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    LLM extracts journal data and decides what is missing.
+    This does not save anything.
+    """
+
+    system_prompt = """
+You are a friendly LifeOS chatbot assistant.
+
+Your job is to help the user save journal entries through conversation.
+
+Journal useful fields:
+- entry_text
+- mood
+- summary
+- tags
+
+Rules:
+- Journal is for feelings, reflections, thoughts, mood, personal experiences, or day summaries.
+- If the user writes a meaningful reflection, prepare confirmation.
+- If the message is too short or unclear, ask one short follow-up question.
+- Do not save directly.
+- Always ask confirmation before saving.
+- Be friendly and natural.
+
+Mood guidance:
+- tired, exhausted -> tired
+- stressed, anxious, worried -> stressed
+- happy, good, great, excited -> happy
+- productive, focused, proud -> productive
+- sad, upset, angry -> negative
+- otherwise -> neutral
+
+Tags guidance:
+Create 1 to 5 short lowercase tags based on the entry.
+Examples:
+project, work, health, family, school, productivity, stress, gratitude
+
+Return ONLY valid JSON:
+{
+  "assistant_message": "string",
+  "conversation_status": "needs_more_info | awaiting_confirmation",
+  "selected_agent": "journal_agent",
+  "intent": "journal_create",
+  "collected_data": {
+    "entry_text": "string or null",
+    "mood": "string or null",
+    "summary": "string or null",
+    "tags": ["tag1", "tag2"]
+  },
+  "missing_fields": ["field_name"]
+}
+"""
+
+    user_prompt = f"""
+Current user message:
+{message}
+
+Current conversation state:
+{json.dumps(conversation_state)}
+"""
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content
+    return json.loads(content)
+
+def handle_journal_conversation(
+    message: str,
+    session: Dict[str, Any],
+) -> Dict[str, Any]:
+    conversation_state = session.get("conversation_state") or {}
+    previous_data = conversation_state.get("collected_data", {}) or {}
+
+    llm_result = extract_journal_conversation_with_llm(
+        message=message,
+        conversation_state=conversation_state,
+    )
+
+    current_data = llm_result.get("collected_data", {}) or {}
+
+    collected_data = previous_data.copy()
+
+    for key, value in current_data.items():
+        if value not in [None, "", [], {}]:
+            collected_data[key] = value
+
+    missing_fields = llm_result.get("missing_fields", []) or []
+
+    entry_text = collected_data.get("entry_text") or ""
+
+    # Avoid saving very short unclear messages as journal.
+    if len(entry_text.strip()) < 10:
+        if "entry_text" not in missing_fields:
+            missing_fields.append("entry_text")
+
+    missing_fields = list(dict.fromkeys(missing_fields))
+
+    if missing_fields:
+        conversation_state = set_conversation_focus(
+            conversation_state,
+            intent="journal_create",
+            selected_agent="journal_agent",
+            collected_data=collected_data,
+            missing_fields=missing_fields,
+        )
+
+        if "entry_text" in missing_fields:
+            assistant_message = (
+                "Can you tell me a little more about how your day went or how you felt?"
+            )
+        else:
+            assistant_message = (
+                llm_result.get("assistant_message")
+                or "Can you share a little more for the journal entry?"
+            )
+
+        conversation_state = append_message_to_state(
+            conversation_state,
+            "assistant",
+            assistant_message,
+        )
+
+        update_chat_session(
+            session_id=session["id"],
+            conversation_state=conversation_state,
+            pending_action=None,
+        )
+
+        return {
+            "assistant_message": assistant_message,
+            "conversation_status": "needs_more_info",
+            "selected_agent": "journal_agent",
+            "intent": "journal_create",
+            "collected_data": collected_data,
+            "missing_fields": missing_fields,
+            "pending_action": None,
+            "confirmation_card": None,
+        }
+
+    if not collected_data.get("mood"):
+        collected_data["mood"] = "neutral"
+
+    if not collected_data.get("summary"):
+        collected_data["summary"] = "Journal entry"
+
+    if not collected_data.get("tags"):
+        collected_data["tags"] = []
+
+    pending_action = create_journal_pending_action(collected_data)
+    confirmation_card = build_confirmation_card(
+        "journal_create",
+        pending_action["data"],
+    )
+
+    assistant_message = "I found this journal entry. Is this correct?"
+
+    conversation_state = set_conversation_focus(
+        conversation_state,
+        intent="journal_create",
+        selected_agent="journal_agent",
+        collected_data=pending_action["data"],
+        missing_fields=[],
+    )
+
+    conversation_state = append_message_to_state(
+        conversation_state,
+        "assistant",
+        assistant_message,
+    )
+
+    update_chat_session(
+        session_id=session["id"],
+        conversation_state=conversation_state,
+        pending_action=pending_action,
+    )
+
+    return {
+        "assistant_message": assistant_message,
+        "conversation_status": "awaiting_confirmation",
+        "selected_agent": "journal_agent",
+        "intent": "journal_create",
+        "collected_data": pending_action["data"],
+        "missing_fields": [],
+        "pending_action": pending_action,
+        "confirmation_card": confirmation_card,
+    }
+
 
 def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
     session = get_or_create_chat_session(user_id)
@@ -1513,6 +1802,9 @@ def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
 
     if current_intent == "place_create" and selected_agent == "places_agent":
         return handle_place_conversation(message, session)
+    
+    if current_intent == "journal_create" and selected_agent == "journal_agent":
+        return handle_journal_conversation(message, session)
 
     route_result = classify_intent(message)
 
@@ -1524,6 +1816,9 @@ def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
 
     if route_result.get("selected_agent") == "places_agent":
         return handle_place_conversation(message, session)
+
+    if route_result.get("selected_agent") == "journal_agent":
+        return handle_journal_conversation(message, session)
 
     return {
         "assistant_message": (
