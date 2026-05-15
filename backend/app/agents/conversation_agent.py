@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from app.agents.expense_agent import handle_expense_message
+from app.agents.task_agent import handle_task_message
 from app.agents.orchestrator import classify_intent
 from app.services.chat_session_store import (
     append_message_to_state,
@@ -91,6 +92,16 @@ def build_confirmation_card(action_type: str, data: Dict[str, Any]) -> Dict[str,
                 {"label": "Category", "value": str(data.get("category", "other")).title()},
                 {"label": "Description", "value": str(data.get("description", "Expense"))},
                 {"label": "Type", "value": str(data.get("transaction_type", "debit")).title()},
+            ],
+        }
+    if action_type == "task_create":
+        return {
+            "title": "Task Details",
+            "fields": [
+                {"label": "Title", "value": str(data.get("title", "Task"))},
+                {"label": "Description", "value": str(data.get("description", ""))},
+                {"label": "Priority", "value": str(data.get("priority", "medium")).title()},
+                {"label": "Due Date", "value": str(data.get("due_date_text", "Not detected"))},
             ],
         }
 
@@ -273,6 +284,82 @@ def handle_pending_confirmation(
                 "missing_fields": [],
                 "pending_action": None,
                 "confirmation_card": build_confirmation_card("expense_create", data),
+                "agent_result": agent_result,
+            }
+        
+
+        if action_type == "task_create":
+            title = data.get("title") or "Task"
+            description = data.get("description") or title
+            due_date_text = data.get("due_date_text")
+            reminder_text = data.get("reminder_text")
+
+            task_message_parts = [
+                title,
+                description,
+            ]
+
+            if due_date_text:
+                task_message_parts.append(f"Due date: {due_date_text}")
+
+            if reminder_text:
+                task_message_parts.append(f"Reminder: {reminder_text}")
+
+            task_message = ". ".join(task_message_parts)
+
+            agent_result = handle_task_message(
+                task_message,
+                data,
+                user_id=user_id,
+            )
+
+            conversation_state = append_message_to_state(
+                conversation_state,
+                "user",
+                message,
+            )
+            conversation_state = reset_conversation_focus(conversation_state)
+
+            update_chat_session(
+                session_id=session["id"],
+                conversation_state=conversation_state,
+                pending_action=None,
+            )
+
+            return {
+                "assistant_message": "Done, I saved it to your tasks.",
+                "conversation_status": "saved",
+                "selected_agent": "task_agent",
+                "intent": "task_create",
+                "collected_data": data,
+                "missing_fields": [],
+                "pending_action": None,
+                "confirmation_card": build_confirmation_card("task_create", data),
+                "agent_result": agent_result,
+            }
+
+            conversation_state = append_message_to_state(
+                conversation_state,
+                "user",
+                message,
+            )
+            conversation_state = reset_conversation_focus(conversation_state)
+
+            update_chat_session(
+                session_id=session["id"],
+                conversation_state=conversation_state,
+                pending_action=None,
+            )
+
+            return {
+                "assistant_message": "Done, I saved it to your tasks.",
+                "conversation_status": "saved",
+                "selected_agent": "task_agent",
+                "intent": "task_create",
+                "collected_data": data,
+                "missing_fields": [],
+                "pending_action": None,
+                "confirmation_card": build_confirmation_card("task_create", data),
                 "agent_result": agent_result,
             }
 
@@ -677,6 +764,345 @@ def summarize_expenses_for_chat(message: str, user_id: str) -> Dict[str, Any]:
         "confirmation_card": confirmation_card,
     }
 
+def create_task_pending_action(collected_data: Dict[str, Any]) -> Dict[str, Any]:
+    due_date_text = collected_data.get("due_date_text")
+    reminder_text = collected_data.get("reminder_text") or due_date_text
+    return {
+        "type": "task_create",
+        "selected_agent": "task_agent",
+        "intent": "task_create",
+        "status": "awaiting_confirmation",
+        "data": {
+            "title": collected_data.get("title") or "Task",
+            "description": collected_data.get("description") or collected_data.get("title") or "Task",
+            "priority": collected_data.get("priority") or "medium",
+            "due_date_text": collected_data.get("due_date_text"),
+            "reminder_text": collected_data.get("reminder_text"),
+            "status": "pending",
+            "created_at": utc_now_iso(),
+        },
+    }
+
+
+def extract_task_conversation_with_llm(
+    message: str,
+    conversation_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    LLM extracts partial task data and decides what is missing.
+    This does not save anything.
+    """
+
+    system_prompt = """
+You are a friendly LifeOS chatbot assistant.
+
+Your job is to help the user create a task through conversation.
+
+Task useful fields:
+- title
+- description
+- priority
+- due_date_text
+- reminder_text
+
+Rules:
+- If user says they need to do something in the future, create a task.
+- If the task is a payment task such as pay rent, pay insurance, pay bill, pay loan, pay electricity:
+  - amount is required
+  - due_date_text is required unless the user says no due date / skip / not sure
+- If amount is missing for payment task, ask: "How much is it?"
+- If due date is missing for payment task after amount is known, ask: "When do you need to pay it?"
+- If the task is clear enough, prepare confirmation.
+- Do not save directly.
+- Always ask confirmation before saving.
+- Be friendly and natural.
+
+Examples:
+User: I need to pay rent tomorrow
+Missing amount, ask: How much is the rent?
+
+User: I need to finish resume by Friday
+Enough info, confirm task.
+
+User: Remind me to call mom tomorrow
+Enough info, confirm task.
+
+Return ONLY valid JSON:
+{
+  "assistant_message": "string",
+  "conversation_status": "needs_more_info | awaiting_confirmation",
+  "selected_agent": "task_agent",
+  "intent": "task_create",
+  "collected_data": {
+    "title": "string or null",
+    "description": "string or null",
+    "priority": "low | medium | high",
+    "due_date_text": "string or null",
+    "reminder_text": "string or null",
+    "amount": number or null
+  },
+  "missing_fields": ["field_name"]
+}
+"""
+
+    user_prompt = f"""
+Current user message:
+{message}
+
+Current conversation state:
+{json.dumps(conversation_state)}
+"""
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=0,
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content
+    return json.loads(content)
+
+
+def handle_task_conversation(
+    message: str,
+    session: Dict[str, Any],
+) -> Dict[str, Any]:
+    conversation_state = session.get("conversation_state") or {}
+    previous_data = conversation_state.get("collected_data", {}) or {}
+
+    llm_result = extract_task_conversation_with_llm(
+        message=message,
+        conversation_state=conversation_state,
+    )
+
+    current_data = llm_result.get("collected_data", {}) or {}
+
+    # Merge previous data first, then apply new non-empty values.
+    # This preserves due dates like "tomorrow" when the next user reply is only "500".
+    collected_data = previous_data.copy()
+
+    for key, value in current_data.items():
+        if value not in [None, "", [], {}]:
+            collected_data[key] = value
+
+    amount = extract_amount_from_text(message)
+    if amount is not None:
+        collected_data["amount"] = amount
+
+    # If user says no date / skip, allow confirmation without due date.
+    if is_no_due_date_response(message):
+        collected_data["due_date_text"] = None
+        collected_data["reminder_text"] = None
+        collected_data["no_due_date_confirmed"] = True
+
+    title = collected_data.get("title") or ""
+    description = collected_data.get("description") or ""
+
+    previous_title = previous_data.get("title") or ""
+    previous_description = previous_data.get("description") or ""
+
+    # Preserve previous title when user replies only with amount/date.
+    if not title and previous_title:
+        collected_data["title"] = previous_title
+        title = previous_title
+
+    if not description and previous_description:
+        collected_data["description"] = previous_description
+        description = previous_description
+
+    task_text = f"{previous_title} {previous_description} {title} {description} {message}".lower()
+
+    payment_keywords = [
+        "pay",
+        "rent",
+        "bill",
+        "insurance",
+        "electricity",
+        "loan",
+        "credit card",
+        "fee",
+        "payment",
+    ]
+
+    is_payment_task = any(keyword in task_text for keyword in payment_keywords)
+
+    # If user gave amount in a follow-up for a payment task, update description.
+    if amount is not None and is_payment_task:
+        if not collected_data.get("title"):
+            collected_data["title"] = "Payment task"
+
+        if "rent" in task_text:
+            collected_data["title"] = "Pay rent"
+        elif "insurance" in task_text:
+            collected_data["title"] = "Pay insurance"
+        elif "electricity" in task_text:
+            collected_data["title"] = "Pay electricity bill"
+        elif "bill" in task_text:
+            collected_data["title"] = "Pay bill"
+
+        collected_data["description"] = (
+            f"{collected_data.get('title', 'Payment task')} of ${amount:.2f}"
+        )
+
+    # Preserve due/reminder from previous turn.
+    if previous_data.get("due_date_text") and not collected_data.get("due_date_text"):
+        collected_data["due_date_text"] = previous_data.get("due_date_text")
+
+    if previous_data.get("reminder_text") and not collected_data.get("reminder_text"):
+        collected_data["reminder_text"] = previous_data.get("reminder_text")
+
+    if collected_data.get("due_date_text") and not collected_data.get("reminder_text"):
+        collected_data["reminder_text"] = collected_data.get("due_date_text")
+
+    missing_fields = []
+
+    if not collected_data.get("title"):
+        missing_fields.append("title")
+
+    # Payment tasks should collect amount before confirmation.
+    if is_payment_task and not collected_data.get("amount"):
+        missing_fields.append("amount")
+
+    # Payment tasks should collect due date/reminder before confirmation,
+    # unless user explicitly said no due date / skip / not sure.
+    if (
+        is_payment_task
+        and collected_data.get("amount")
+        and not collected_data.get("due_date_text")
+        and not collected_data.get("no_due_date_confirmed")
+    ):
+        missing_fields.append("due_date_text")
+
+    # Remove duplicates
+    missing_fields = list(dict.fromkeys(missing_fields))
+
+    if missing_fields:
+        conversation_state = set_conversation_focus(
+            conversation_state,
+            intent="task_create",
+            selected_agent="task_agent",
+            collected_data=collected_data,
+            missing_fields=missing_fields,
+        )
+
+        if "amount" in missing_fields:
+            assistant_message = "How much is it?"
+        elif "due_date_text" in missing_fields:
+            assistant_message = "When do you need to pay it?"
+        elif "title" in missing_fields:
+            assistant_message = "What task should I create?"
+        else:
+            assistant_message = "Can you give me a little more detail?"
+
+        conversation_state = append_message_to_state(
+            conversation_state,
+            "assistant",
+            assistant_message,
+        )
+
+        update_chat_session(
+            session_id=session["id"],
+            conversation_state=conversation_state,
+            pending_action=None,
+        )
+
+        return {
+            "assistant_message": assistant_message,
+            "conversation_status": "needs_more_info",
+            "selected_agent": "task_agent",
+            "intent": "task_create",
+            "collected_data": collected_data,
+            "missing_fields": missing_fields,
+            "pending_action": None,
+            "confirmation_card": None,
+        }
+
+    if not collected_data.get("priority"):
+        collected_data["priority"] = "medium"
+
+    if not collected_data.get("description"):
+        collected_data["description"] = collected_data.get("title")
+
+    pending_action = create_task_pending_action(collected_data)
+    confirmation_card = build_confirmation_card("task_create", pending_action["data"])
+
+    assistant_message = "I found this task. Is this correct?"
+
+    conversation_state = set_conversation_focus(
+        conversation_state,
+        intent="task_create",
+        selected_agent="task_agent",
+        collected_data=pending_action["data"],
+        missing_fields=[],
+    )
+
+    conversation_state = append_message_to_state(
+        conversation_state,
+        "assistant",
+        assistant_message,
+    )
+
+    update_chat_session(
+        session_id=session["id"],
+        conversation_state=conversation_state,
+        pending_action=pending_action,
+    )
+
+    return {
+        "assistant_message": assistant_message,
+        "conversation_status": "awaiting_confirmation",
+        "selected_agent": "task_agent",
+        "intent": "task_create",
+        "collected_data": pending_action["data"],
+        "missing_fields": [],
+        "pending_action": pending_action,
+        "confirmation_card": confirmation_card,
+    }
+
+def is_no_due_date_response(message: str) -> bool:
+    normalized = normalize_message(message)
+
+    # Normalize common typing variations
+    normalized = normalized.replace("duedate", "due date")
+    normalized = normalized.replace("dont", "don't")
+    normalized = normalized.replace("end date", "due date")
+
+    no_due_phrases = {
+        "no",
+        "no date",
+        "no due date",
+        "not sure",
+        "i don't know",
+        "don't know",
+        "i dont know",
+        "dont know",
+        "skip",
+        "none",
+        "no reminder",
+        "no deadline",
+        "no due",
+        "no need",
+    }
+
+    if normalized in no_due_phrases:
+        return True
+
+    fuzzy_patterns = [
+        "no due date",
+        "no date",
+        "not sure",
+        "don't know",
+        "dont know",
+        "skip",
+        "no deadline",
+        "no reminder",
+    ]
+
+    return any(pattern in normalized for pattern in fuzzy_patterns)
 
 def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
     """
@@ -746,14 +1172,20 @@ def handle_conversational_chat(message: str, user_id: str) -> Dict[str, Any]:
     current_intent = conversation_state.get("current_intent")
     selected_agent = conversation_state.get("selected_agent")
 
-    # Continue existing expense conversation after bot asked a follow-up.
+    # Continue existing conversation after bot asked a follow-up.
     if current_intent == "expense_create" and selected_agent == "expense_agent":
         return handle_expense_conversation(message, session)
+
+    if current_intent == "task_create" and selected_agent == "task_agent":
+        return handle_task_conversation(message, session)
 
     route_result = classify_intent(message)
 
     if route_result.get("selected_agent") == "expense_agent":
         return handle_expense_conversation(message, session)
+
+    if route_result.get("selected_agent") == "task_agent":
+        return handle_task_conversation(message, session)
 
     # For agents not converted yet, respond conversationally but do not save.
     return {
