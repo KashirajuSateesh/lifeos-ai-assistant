@@ -480,10 +480,17 @@ export async function createJournalEntry(entryText: string) {
   return response.json();
 }
 
-export async function resetChatSession() {
+export async function resetChatSession(accessToken?: string) {
+  const headers: HeadersInit = accessToken
+    ? {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      }
+    : await getAuthHeaders();
+
   const response = await fetch(`${getBackendUrl()}/api/chat/reset`, {
     method: "POST",
-    headers: await getAuthHeaders(),
+    headers,
   });
 
   if (!response.ok) {

@@ -24,8 +24,14 @@ export default function BottomNav() {
   const [showMore, setShowMore] = useState(false);
 
   async function logout() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     try {
-      await resetChatSession();
+      if (session?.access_token) {
+        await resetChatSession(session.access_token);
+      }
     } catch (error) {
       console.error("Failed to reset chat session on logout:", error);
     }
@@ -33,6 +39,8 @@ export default function BottomNav() {
     window.sessionStorage.removeItem("lifeos_chat_messages");
 
     await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
   }
 
   return (
