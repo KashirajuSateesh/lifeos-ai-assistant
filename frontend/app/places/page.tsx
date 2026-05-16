@@ -126,6 +126,62 @@ export default function PlacesPage() {
     }
   }
 
+  async function fetchPlaceSuggestions() {
+    setNotice(null);
+    setSuggestionsLoading(true);
+
+    try {
+      const data = await getPlaceSuggestions(0);
+      setPlaceSuggestions(data);
+    } catch (error) {
+      console.error(error);
+
+      setNotice({
+        type: "error",
+        message: "Failed to fetch place suggestions.",
+      });
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
+  async function refreshPlacesPage() {
+    setNotice(null);
+
+    setNearbyPlaces(null);
+    setNearbyLoading(false);
+
+    setLoading(true);
+
+    try {
+      const data = await getPlaces({
+        status: selectedStatus,
+        category: selectedCategory,
+      });
+
+      const cleanedPlaces = data.places.map((place) => ({
+        ...place,
+        distance_km: null,
+      }));
+
+      setPlacesData({
+        ...data,
+        places: cleanedPlaces,
+      });
+
+      await fetchPlaceSuggestions();
+    } catch (error) {
+      console.error(error);
+
+      setNotice({
+        type: "error",
+        message: "Failed to refresh places.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function checkNearbyPlaces() {
     setNotice(null);
 
@@ -244,37 +300,15 @@ export default function PlacesPage() {
     );
   }
 
-  async function refreshPlacesPage() {
-    setNotice(null);
-
-    setNearbyPlaces(null);
-    setNearbyLoading(false);
-
-    const data = await getPlaces({
-      status: selectedStatus,
-      category: selectedCategory,
-    });
-
-    const cleanedPlaces = data.places.map((place) => ({
-      ...place,
-      distance_km: null,
-    }));
-
-    setPlacesData({
-      ...data,
-      places: cleanedPlaces,
-    });
-
-    await fetchPlaceSuggestions();
-  }
-
   async function handleStatusChange(status: PlaceStatusFilter) {
     setSelectedStatus(status);
+    setNearbyPlaces(null);
     await fetchPlaces(status, selectedCategory);
   }
 
   async function handleCategoryChange(category: PlaceCategoryFilter) {
     setSelectedCategory(category);
+    setNearbyPlaces(null);
     await fetchPlaces(selectedStatus, category);
   }
 
@@ -375,25 +409,6 @@ export default function PlacesPage() {
     }
   }
 
-  async function fetchPlaceSuggestions() {
-    setNotice(null);
-    setSuggestionsLoading(true);
-
-    try {
-      const data = await getPlaceSuggestions(0);
-      setPlaceSuggestions(data);
-    } catch (error) {
-      console.error(error);
-
-      setNotice({
-        type: "error",
-        message: "Failed to fetch place suggestions.",
-      });
-    } finally {
-      setSuggestionsLoading(false);
-    }
-  }
-
   useEffect(() => {
     async function loadPage() {
       const {
@@ -426,7 +441,7 @@ export default function PlacesPage() {
         {notice && <Notice type={notice.type} message={notice.message} />}
 
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
               <h2 className="text-2xl font-bold">Filters</h2>
               <p className="mt-2 text-slate-400">
@@ -446,7 +461,7 @@ export default function PlacesPage() {
                 onClick={calculateAllPlaceDistances}
                 className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-700"
               >
-                Show Distance on All Cards
+                Show Distance on Saved Places
               </button>
             </div>
           </div>
@@ -546,49 +561,51 @@ export default function PlacesPage() {
               </div>
 
               {nearbyPlaces.places.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  {nearbyPlaces.places.map((place) => (
-                    <div
-                      key={`nearby-${place.id}`}
-                      className="rounded-xl border border-blue-500/40 bg-slate-800 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="font-semibold">{place.place_name}</p>
-                          <p className="mt-1 text-sm capitalize text-slate-400">
-                            {place.category ?? "general"} ·{" "}
-                            {place.status.replace("_", " ")}
-                          </p>
+                <div className="lifeos-scrollbar max-h-[360px] overflow-y-auto pr-2">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {nearbyPlaces.places.map((place) => (
+                      <div
+                        key={`nearby-${place.id}`}
+                        className="rounded-xl border border-blue-500/40 bg-slate-800 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="font-semibold">{place.place_name}</p>
+                            <p className="mt-1 text-sm capitalize text-slate-400">
+                              {place.category ?? "general"} ·{" "}
+                              {place.status.replace("_", " ")}
+                            </p>
+                          </div>
+
+                          <span className="rounded-full bg-blue-600 px-3 py-1 text-xs">
+                            {place.distance_km ?? "?"} km
+                          </span>
                         </div>
 
-                        <span className="rounded-full bg-blue-600 px-3 py-1 text-xs">
-                          {place.distance_km ?? "?"} km
-                        </span>
-                      </div>
-
-                      <p className="mt-3 text-sm text-slate-300">
-                        This saved place is nearby. Do you want to visit or try
-                        it?
-                      </p>
-
-                      {place.address && (
-                        <p className="mt-2 text-xs leading-5 text-slate-400">
-                          {place.address}
+                        <p className="mt-3 text-sm text-slate-300">
+                          This saved place is nearby. Do you want to visit or
+                          try it?
                         </p>
-                      )}
 
-                      {place.source_url && (
-                        <a
-                          href={place.source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-3 inline-block rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700"
-                        >
-                          Open Link
-                        </a>
-                      )}
-                    </div>
-                  ))}
+                        {place.address && (
+                          <p className="mt-2 text-xs leading-5 text-slate-400">
+                            {place.address}
+                          </p>
+                        )}
+
+                        {place.source_url && (
+                          <a
+                            href={place.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-block rounded-lg border border-slate-600 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700"
+                          >
+                            Open Link
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="text-slate-400">
@@ -599,8 +616,8 @@ export default function PlacesPage() {
           )}
         </section>
 
-        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <section className="mb-6 flex max-h-[520px] min-h-[360px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+          <div className="mb-5 flex shrink-0 flex-col justify-between gap-4 md:flex-row md:items-start">
             <div>
               <p className="text-sm font-medium text-blue-400">Suggestions</p>
               <h2 className="text-2xl font-bold">Places You Saved Earlier</h2>
@@ -618,78 +635,82 @@ export default function PlacesPage() {
             </button>
           </div>
 
-          {suggestionsLoading ? (
-            <p className="text-slate-400">Loading suggestions...</p>
-          ) : placeSuggestions && placeSuggestions.places.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {placeSuggestions.places.slice(0, 4).map((place) => (
-                <div
-                  key={`suggestion-${place.id}`}
-                  className="rounded-xl border border-orange-500/40 bg-slate-800 p-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-semibold">{place.place_name}</p>
-                      <p className="mt-1 text-sm capitalize text-slate-400">
-                        {place.category ?? "general"} ·{" "}
-                        {place.status.replace("_", " ")}
-                      </p>
+          <div className="lifeos-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+            {suggestionsLoading ? (
+              <p className="text-slate-400">Loading suggestions...</p>
+            ) : placeSuggestions && placeSuggestions.places.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {placeSuggestions.places.map((place) => (
+                  <div
+                    key={`suggestion-${place.id}`}
+                    className="rounded-xl border border-orange-500/40 bg-slate-800 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold">{place.place_name}</p>
+                        <p className="mt-1 text-sm capitalize text-slate-400">
+                          {place.category ?? "general"} ·{" "}
+                          {place.status.replace("_", " ")}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full bg-orange-600 px-3 py-1 text-xs">
+                        Saved
+                      </span>
                     </div>
 
-                    <span className="rounded-full bg-orange-600 px-3 py-1 text-xs">
-                      Saved
-                    </span>
-                  </div>
+                    <p className="mt-3 text-sm text-slate-300">
+                      You saved this place earlier. Still want to visit or try
+                      it?
+                    </p>
 
-                  <p className="mt-3 text-sm text-slate-300">
-                    You saved this place earlier. Still want to visit or try it?
-                  </p>
-
-                  {place.image_url && (
-                    <img
-                      src={place.image_url}
-                      alt={place.place_name}
-                      className="mt-4 h-36 w-full rounded-xl object-cover"
-                    />
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {!place.visited && (
-                      <button
-                        onClick={() => markVisited(place)}
-                        className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
-                      >
-                        Mark Visited
-                      </button>
+                    {place.image_url && (
+                      <img
+                        src={place.image_url}
+                        alt={place.place_name}
+                        className="mt-4 h-36 w-full rounded-xl object-cover"
+                      />
                     )}
 
-                    {place.source_url && (
-                      <a
-                        href={place.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700"
-                      >
-                        Open Link
-                      </a>
-                    )}
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {!place.visited && (
+                        <button
+                          onClick={() => markVisited(place)}
+                          className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                        >
+                          Mark Visited
+                        </button>
+                      )}
+
+                      {place.source_url && (
+                        <a
+                          href={place.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700"
+                        >
+                          Open Link
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-slate-400">
-              No saved-place suggestions right now.
-            </p>
-          )}
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400">
+                No saved-place suggestions right now.
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="flex max-h-[78vh] min-h-[560px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-5 flex shrink-0 items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-400">Saved Places</p>
               <h2 className="text-2xl font-bold">
-                {placesData?.count ?? 0} place(s)
+                {placesData?.places.length ?? 0} place
+                {(placesData?.places.length ?? 0) === 1 ? "" : "s"}
               </h2>
             </div>
           </div>
@@ -847,8 +868,8 @@ export default function PlacesPage() {
               </div>
             ) : (
               <p className="text-slate-400">
-                No places found. Use the Chat page to save places like: “I want to
-                visit Central Park in New York.”
+                No places found. Use the Chat page to save places like: “I want
+                to visit Central Park in New York.”
               </p>
             )}
           </div>

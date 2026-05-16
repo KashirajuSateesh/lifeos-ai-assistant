@@ -31,6 +31,9 @@ export default function ExpensesPage() {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
   const [categoryFilter, setCategoryFilter] =
     useState<ExpenseCategoryFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "debit" | "credit">(
+    "all"
+  );
 
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
@@ -110,6 +113,13 @@ export default function ExpensesPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function resetFilters() {
+    setCustomStartDate("");
+    setCustomEndDate("");
+    setTypeFilter("all");
+    fetchExpenses("all", "all");
   }
 
   function startEdit(expense: ExpenseItem) {
@@ -230,7 +240,14 @@ export default function ExpensesPage() {
     loadPage();
   }, []);
 
-  const expenses = expensesData?.expenses ?? [];
+  const allExpenses = expensesData?.expenses ?? [];
+
+  const expenses = allExpenses.filter((expense) => {
+    const matchesType =
+      typeFilter === "all" || expense.transaction_type === typeFilter;
+
+    return matchesType;
+  });
 
   return (
     <AppShell>
@@ -268,11 +285,12 @@ export default function ExpensesPage() {
           <div className="mb-5">
             <h2 className="text-2xl font-bold">Filters</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Filter your transactions by period, category, or custom date.
+              Filter your transactions by period, category, type, or custom
+              date.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
               <label className="mb-1 block text-sm text-slate-400">
                 Period
@@ -325,6 +343,25 @@ export default function ExpensesPage() {
 
             <div>
               <label className="mb-1 block text-sm text-slate-400">
+                Type
+              </label>
+              <select
+                value={typeFilter}
+                onChange={(event) =>
+                  setTypeFilter(
+                    event.target.value as "all" | "debit" | "credit"
+                  )
+                }
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-3 text-white outline-none focus:border-blue-500"
+              >
+                <option value="all">All Types</option>
+                <option value="debit">Debit</option>
+                <option value="credit">Credit</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm text-slate-400">
                 Start Date
               </label>
               <input
@@ -357,11 +394,7 @@ export default function ExpensesPage() {
             </button>
 
             <button
-              onClick={() => {
-                setCustomStartDate("");
-                setCustomEndDate("");
-                fetchExpenses("all", "all");
-              }}
+              onClick={resetFilters}
               className="rounded-xl border border-slate-700 px-5 py-3 text-sm hover:bg-slate-800"
             >
               Reset Filters
@@ -370,11 +403,12 @@ export default function ExpensesPage() {
         </section>
 
         <section className="flex max-h-[75vh] min-h-[500px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+          <div className="mb-5 flex shrink-0 flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-bold">Transactions</h2>
               <p className="mt-1 text-sm text-slate-400">
-                {expensesData?.count ?? 0} transactions found.
+                {expenses.length} transaction
+                {expenses.length === 1 ? "" : "s"} found.
               </p>
             </div>
 
@@ -392,127 +426,25 @@ export default function ExpensesPage() {
             ) : expenses.length === 0 ? (
               <p className="text-slate-400">No transactions found.</p>
             ) : (
-              <div className="lifeos-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+              <div className="space-y-3">
                 {expenses.map((expense) => (
-                  <div
+                  <TransactionCard
                     key={expense.id}
-                    className="rounded-xl border border-slate-700 bg-slate-800 p-4"
-                  >
-                    {editingExpense?.id === expense.id ? (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                          <input
-                            type="number"
-                            value={editAmount}
-                            onChange={(event) => setEditAmount(event.target.value)}
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                            placeholder="Amount"
-                          />
-
-                          <input
-                            type="text"
-                            value={editCategory}
-                            onChange={(event) =>
-                              setEditCategory(event.target.value)
-                            }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                            placeholder="Category"
-                          />
-
-                          <select
-                            value={editTransactionType}
-                            onChange={(event) =>
-                              setEditTransactionType(
-                                event.target.value as "debit" | "credit"
-                              )
-                            }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                          >
-                            <option value="debit">Debit</option>
-                            <option value="credit">Credit</option>
-                          </select>
-
-                          <input
-                            type="text"
-                            value={editDescription}
-                            onChange={(event) =>
-                              setEditDescription(event.target.value)
-                            }
-                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                            placeholder="Description"
-                          />
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={saveEdit}
-                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700"
-                          >
-                            Save
-                          </button>
-
-                          <button
-                            onClick={cancelEdit}
-                            className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-700"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-semibold">
-                              {expense.description || "Transaction"}
-                            </p>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${
-                                expense.transaction_type === "credit"
-                                  ? "bg-emerald-500/10 text-emerald-300"
-                                  : "bg-red-500/10 text-red-300"
-                              }`}
-                            >
-                              {expense.transaction_type}
-                            </span>
-                          </div>
-
-                          <p className="mt-1 text-sm capitalize text-slate-400">
-                            {expense.category} ·{" "}
-                            {new Date(expense.created_at).toLocaleString()}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                          <p
-                            className={`text-xl font-bold ${
-                              expense.transaction_type === "credit"
-                                ? "text-emerald-300"
-                                : "text-red-300"
-                            }`}
-                          >
-                            {expense.transaction_type === "credit" ? "+" : "-"}$
-                            {Number(expense.amount).toFixed(2)}
-                          </p>
-
-                          <button
-                            onClick={() => startEdit(expense)}
-                            className="rounded-lg border border-slate-600 px-3 py-2 text-xs hover:bg-slate-700"
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            onClick={() => requestDeleteExpense(expense)}
-                            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                    expense={expense}
+                    editingExpense={editingExpense}
+                    editAmount={editAmount}
+                    editCategory={editCategory}
+                    editDescription={editDescription}
+                    editTransactionType={editTransactionType}
+                    setEditAmount={setEditAmount}
+                    setEditCategory={setEditCategory}
+                    setEditDescription={setEditDescription}
+                    setEditTransactionType={setEditTransactionType}
+                    onSave={saveEdit}
+                    onCancel={cancelEdit}
+                    onEdit={startEdit}
+                    onDelete={requestDeleteExpense}
+                  />
                 ))}
               </div>
             )}
@@ -582,6 +514,155 @@ function SummaryCard({
       <p className="text-sm text-slate-400">{title}</p>
       <p className="mt-2 text-3xl font-bold">{value}</p>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+function TransactionCard({
+  expense,
+  editingExpense,
+  editAmount,
+  editCategory,
+  editDescription,
+  editTransactionType,
+  setEditAmount,
+  setEditCategory,
+  setEditDescription,
+  setEditTransactionType,
+  onSave,
+  onCancel,
+  onEdit,
+  onDelete,
+}: {
+  expense: ExpenseItem;
+  editingExpense: ExpenseItem | null;
+  editAmount: string;
+  editCategory: string;
+  editDescription: string;
+  editTransactionType: "debit" | "credit";
+  setEditAmount: (value: string) => void;
+  setEditCategory: (value: string) => void;
+  setEditDescription: (value: string) => void;
+  setEditTransactionType: (value: "debit" | "credit") => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onEdit: (expense: ExpenseItem) => void;
+  onDelete: (expense: ExpenseItem) => void;
+}) {
+  const isEditing = editingExpense?.id === expense.id;
+
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+      {isEditing ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <input
+              type="number"
+              value={editAmount}
+              onChange={(event) => setEditAmount(event.target.value)}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+              placeholder="Amount"
+            />
+
+            <input
+              type="text"
+              value={editCategory}
+              onChange={(event) => setEditCategory(event.target.value)}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+              placeholder="Category"
+            />
+
+            <select
+              value={editTransactionType}
+              onChange={(event) =>
+                setEditTransactionType(
+                  event.target.value as "debit" | "credit"
+                )
+              }
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+            >
+              <option value="debit">Debit</option>
+              <option value="credit">Credit</option>
+            </select>
+
+            <input
+              type="text"
+              value={editDescription}
+              onChange={(event) => setEditDescription(event.target.value)}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+              placeholder="Description"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={onSave}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700"
+            >
+              Save
+            </button>
+
+            <button
+              onClick={onCancel}
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-lg font-semibold">
+                {expense.description || "Transaction"}
+              </p>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs ${
+                  expense.transaction_type === "credit"
+                    ? "bg-emerald-500/10 text-emerald-300"
+                    : "bg-red-500/10 text-red-300"
+                }`}
+              >
+                {expense.transaction_type}
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm capitalize text-slate-400">
+              {expense.category} ·{" "}
+              {new Date(expense.created_at).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <p
+              className={`text-xl font-bold ${
+                expense.transaction_type === "credit"
+                  ? "text-emerald-300"
+                  : "text-red-300"
+              }`}
+            >
+              {expense.transaction_type === "credit" ? "+" : "-"}$
+              {Number(expense.amount).toFixed(2)}
+            </p>
+
+            <button
+              onClick={() => onEdit(expense)}
+              className="rounded-lg border border-slate-600 px-3 py-2 text-xs hover:bg-slate-700"
+            >
+              Edit
+            </button>
+
+            <button
+              onClick={() => onDelete(expense)}
+              className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
