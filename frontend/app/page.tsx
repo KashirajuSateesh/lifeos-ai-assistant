@@ -318,40 +318,6 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-              <div className="mb-5">
-                <h2 className="text-xl font-bold">Quick Actions</h2>
-                <p className="mt-1 text-sm text-slate-400">
-                  Jump into the main LifeOS workflows.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                <QuickActionCard
-                  href="/chat"
-                  title="Open AI Chat"
-                  description="Log expenses, create tasks, journal, or save places."
-                />
-
-                <QuickActionCard
-                  href="/expenses"
-                  title="Money"
-                  description="View income, spending, and balance."
-                />
-
-                <QuickActionCard
-                  href="/tasks"
-                  title="Tasks"
-                  description="Manage todos, reminders, and follow-ups."
-                />
-
-                <QuickActionCard
-                  href="/places"
-                  title="Places"
-                  description="See saved, nearby, and suggested places."
-                />
-              </div>
-            </section>
           </>
         )}
       </div>
@@ -383,25 +349,5 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="text-sm text-slate-400">{label}</p>
       <p className="mt-1 text-xl font-bold">{value}</p>
     </div>
-  );
-}
-
-function QuickActionCard({
-  href,
-  title,
-  description,
-}: {
-  href: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-xl border border-slate-700 bg-slate-800 p-4 transition hover:-translate-y-0.5 hover:border-blue-500/60 hover:bg-slate-800/80"
-    >
-      <p className="font-semibold">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
-    </Link>
   );
 }
