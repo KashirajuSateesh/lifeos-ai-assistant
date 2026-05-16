@@ -198,20 +198,11 @@ export default function TasksPage() {
         </section>
 
         <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-              <h2 className="text-2xl font-bold">Reminders</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Quick view of due today, upcoming, overdue, and follow-up tasks.
-              </p>
-            </div>
-
-            <button
-              onClick={fetchTaskReminders}
-              className="rounded-xl border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
-            >
-              Refresh Reminders
-            </button>
+          <div className="mb-5">
+            <h2 className="text-2xl font-bold">Reminders</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Quick view of due today, upcoming, overdue, and follow-up tasks.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">

@@ -109,15 +109,15 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl">
         <section className="mb-8 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 p-6 shadow-xl">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:text-left">
               {profile?.profile_photo_url ? (
                 <img
                   src={profile.profile_photo_url}
                   alt="Profile"
-                  className="h-20 w-20 rounded-full object-cover shadow-lg"
+                  className="h-20 w-20 shrink-0 rounded-full object-cover shadow-lg ring-2 ring-blue-500/20 sm:h-24 sm:w-24"
                 />
               ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white shadow-lg">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-blue-600 text-2xl font-bold text-white shadow-lg ring-2 ring-blue-500/20 sm:h-24 sm:w-24">
                   {initials}
                 </div>
               )}
@@ -139,7 +139,7 @@ export default function DashboardPage() {
             <button
               onClick={loadDashboard}
               disabled={loading}
-              className="rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+              className="w-full rounded-xl border border-slate-700 px-4 py-3 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60 md:w-auto"
             >
               {loading ? "Refreshing..." : "Refresh"}
             </button>
