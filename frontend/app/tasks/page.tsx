@@ -218,31 +218,27 @@ export default function TasksPage() {
             <ReminderColumn
               title="Due Today"
               tasks={remindersData?.due_today ?? []}
-              emptyText="No tasks due today."
             />
 
             <ReminderColumn
               title="Upcoming"
               tasks={remindersData?.upcoming ?? []}
-              emptyText="No upcoming tasks."
             />
 
             <ReminderColumn
               title="Overdue"
               tasks={remindersData?.overdue ?? []}
-              emptyText="No overdue tasks."
             />
 
             <ReminderColumn
               title="Follow-Up"
               tasks={remindersData?.follow_up ?? []}
-              emptyText="No follow-up tasks."
             />
           </div>
         </section>
 
         <section className="flex max-h-[75vh] min-h-[500px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
-          <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
+          <div className="mb-5 flex shrink-0 flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-bold">All Tasks</h2>
               <p className="mt-1 text-sm text-slate-400">
@@ -365,35 +361,49 @@ function SummaryCard({
 function ReminderColumn({
   title,
   tasks,
-  emptyText,
 }: {
   title: string;
   tasks: TaskItem[];
-  emptyText: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
-      <h3 className="font-semibold">{title}</h3>
-
-      {tasks.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-400">{emptyText}</p>
-      ) : (
-        <div className="mt-3 space-y-2">
-          {tasks.slice(0, 4).map((task) => (
-            <div
-              key={task.id}
-              className="rounded-lg border border-slate-700 bg-slate-900 p-3"
-            >
-              <p className="text-sm font-medium">{task.title}</p>
-
-              {task.due_date && (
-                <p className="mt-1 text-xs text-slate-400">
-                  Due: {new Date(task.due_date).toLocaleString()}
-                </p>
-              )}
-            </div>
-          ))}
+    <div className="flex h-[355px] flex-col rounded-2xl border border-slate-800 bg-slate-950/50 p-5 shadow-xl">
+      <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold">{title}</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            {tasks.length} task{tasks.length === 1 ? "" : "s"}
+          </p>
         </div>
+      </div>
+
+      <div className="lifeos-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+        {tasks.length > 0 ? (
+          <div className="space-y-3">
+            {tasks.map((task) => (
+              <ReminderTaskCard key={task.id} task={task} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No tasks here.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReminderTaskCard({ task }: { task: TaskItem }) {
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-800 p-4">
+      <p className="font-semibold text-white">{task.title}</p>
+
+      {task.description ? (
+        <p className="mt-1 line-clamp-2 text-sm text-slate-400">
+          {task.description}
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-slate-500">
+          No description provided.
+        </p>
       )}
     </div>
   );
