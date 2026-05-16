@@ -34,6 +34,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(false);
   const [priorityFilter, setPriorityFilter] =
     useState<TaskPriorityFilter>("all");
+  const [statusFilter, setStatusFilter] =
+    useState<"all" | "pending" | "completed" | "no_due_date">("all");
 
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const [deletingTask, setDeletingTask] = useState(false);
@@ -157,7 +159,19 @@ export default function TasksPage() {
     loadPage();
   }, []);
 
-  const tasks = tasksData?.tasks ?? [];
+  const allTasks = tasksData?.tasks ?? [];
+
+  const tasks = allTasks.filter((task) => {
+    if (statusFilter === "all") {
+      return true;
+    }
+
+    if (statusFilter === "no_due_date") {
+      return !task.due_date && !task.reminder_at;
+    }
+
+    return task.status === statusFilter;
+  });
 
   return (
     <AppShell>
@@ -233,7 +247,7 @@ export default function TasksPage() {
             <div>
               <h2 className="text-2xl font-bold">All Tasks</h2>
               <p className="mt-1 text-sm text-slate-400">
-                {tasksData?.count ?? 0} tasks found.
+                {tasks.length} task{tasks.length === 1 ? "" : "s"} found.
               </p>
             </div>
 
@@ -249,6 +263,21 @@ export default function TasksPage() {
                 <option value="low">Low Priority</option>
                 <option value="medium">Medium Priority</option>
                 <option value="high">High Priority</option>
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(
+                    event.target.value as "all" | "pending" | "completed" | "no_due_date"
+                  )
+                }
+                className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="no_due_date">No Due Date</option>
               </select>
 
               <button
