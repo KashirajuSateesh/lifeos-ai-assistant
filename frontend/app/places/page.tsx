@@ -684,7 +684,7 @@ export default function PlacesPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+        <section className="flex max-h-[78vh] min-h-[560px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-400">Saved Places</p>
@@ -694,162 +694,164 @@ export default function PlacesPage() {
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-slate-400">Loading places...</p>
-          ) : placesData && placesData.places.length > 0 ? (
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {placesData.places.map((place) => (
-                <div
-                  key={place.id}
-                  className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800"
-                >
-                  {placeImage(place) ? (
-                    <img
-                      src={placeImage(place) ?? ""}
-                      alt={place.place_name}
-                      className="h-44 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-44 items-center justify-center bg-slate-900 text-slate-500">
-                      No image found
-                    </div>
-                  )}
-
-                  <div className="p-5">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-bold">
-                          {place.place_name}
-                        </h3>
-                        <p className="mt-1 text-sm capitalize text-slate-400">
-                          {place.category ?? "general"} ·{" "}
-                          {statusLabel(place.status)}
-                        </p>
+          <div className="lifeos-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+            {loading ? (
+              <p className="text-slate-400">Loading places...</p>
+            ) : placesData && placesData.places.length > 0 ? (
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {placesData.places.map((place) => (
+                  <div
+                    key={place.id}
+                    className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800"
+                  >
+                    {placeImage(place) ? (
+                      <img
+                        src={placeImage(place) ?? ""}
+                        alt={place.place_name}
+                        className="h-44 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-44 items-center justify-center bg-slate-900 text-slate-500">
+                        No image found
                       </div>
+                    )}
 
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs ${
-                          place.visited
-                            ? "bg-emerald-500/20 text-emerald-300"
-                            : "bg-blue-500/20 text-blue-300"
-                        }`}
-                      >
-                        {place.visited ? "Visited" : "Not visited"}
-                      </span>
-                    </div>
-
-                    <p className="line-clamp-3 text-sm leading-6 text-slate-300">
-                      {place.description ?? place.notes ?? "No notes"}
-                    </p>
-
-                    {place.environment_tags &&
-                      place.environment_tags.length > 0 && (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {place.environment_tags.map((tag) => (
-                            <span
-                              key={`${place.id}-${tag}`}
-                              className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                    <div className="mt-4 space-y-2 text-sm">
-                      <div className="flex justify-between gap-3">
-                        <span className="text-slate-400">Distance</span>
-                        <span className="text-right">
-                          {place.distance_km != null
-                            ? `${place.distance_km} km away`
-                            : "Location unknown"}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between gap-3">
-                        <span className="text-slate-400">Location</span>
-                        <span className="text-right">
-                          {place.location_known ? "Known" : "Unknown"}
-                        </span>
-                      </div>
-
-                      {place.city && (
-                        <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">City</span>
-                          <span className="text-right">{place.city}</span>
-                        </div>
-                      )}
-
-                      {place.address && (
+                    <div className="p-5">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-slate-400">Address</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-300">
-                            {place.address}
+                          <h3 className="text-lg font-bold">
+                            {place.place_name}
+                          </h3>
+                          <p className="mt-1 text-sm capitalize text-slate-400">
+                            {place.category ?? "general"} ·{" "}
+                            {statusLabel(place.status)}
                           </p>
                         </div>
-                      )}
 
-                      {place.photo_credit && (
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs ${
+                            place.visited
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-blue-500/20 text-blue-300"
+                          }`}
+                        >
+                          {place.visited ? "Visited" : "Not visited"}
+                        </span>
+                      </div>
+
+                      <p className="line-clamp-3 text-sm leading-6 text-slate-300">
+                        {place.description ?? place.notes ?? "No notes"}
+                      </p>
+
+                      {place.environment_tags &&
+                        place.environment_tags.length > 0 && (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {place.environment_tags.map((tag) => (
+                              <span
+                                key={`${place.id}-${tag}`}
+                                className="rounded-full border border-slate-600 px-2 py-1 text-xs text-slate-300"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                      <div className="mt-4 space-y-2 text-sm">
                         <div className="flex justify-between gap-3">
-                          <span className="text-slate-400">Photo</span>
-                          <span className="text-right text-xs">
-                            Pexels / {place.photo_credit}
+                          <span className="text-slate-400">Distance</span>
+                          <span className="text-right">
+                            {place.distance_km != null
+                              ? `${place.distance_km} km away`
+                              : "Location unknown"}
                           </span>
                         </div>
-                      )}
-                    </div>
 
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {!place.visited && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-400">Location</span>
+                          <span className="text-right">
+                            {place.location_known ? "Known" : "Unknown"}
+                          </span>
+                        </div>
+
+                        {place.city && (
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-400">City</span>
+                            <span className="text-right">{place.city}</span>
+                          </div>
+                        )}
+
+                        {place.address && (
+                          <div>
+                            <p className="text-slate-400">Address</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-300">
+                              {place.address}
+                            </p>
+                          </div>
+                        )}
+
+                        {place.photo_credit && (
+                          <div className="flex justify-between gap-3">
+                            <span className="text-slate-400">Photo</span>
+                            <span className="text-right text-xs">
+                              Pexels / {place.photo_credit}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        {!place.visited && (
+                          <button
+                            onClick={() => markVisited(place)}
+                            className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                          >
+                            Mark Visited
+                          </button>
+                        )}
+
                         <button
-                          onClick={() => markVisited(place)}
-                          className="rounded-lg border border-emerald-500/40 px-3 py-1 text-xs text-emerald-300 hover:bg-emerald-500/10"
+                          onClick={() => toggleFavorite(place)}
+                          className="rounded-lg border border-blue-500/40 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/10"
                         >
-                          Mark Visited
+                          {place.status === "favorite"
+                            ? "Move to Want"
+                            : "Favorite"}
                         </button>
-                      )}
 
-                      <button
-                        onClick={() => toggleFavorite(place)}
-                        className="rounded-lg border border-blue-500/40 px-3 py-1 text-xs text-blue-300 hover:bg-blue-500/10"
-                      >
-                        {place.status === "favorite"
-                          ? "Move to Want"
-                          : "Favorite"}
-                      </button>
+                        {place.source_url && (
+                          <a
+                            href={place.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700"
+                          >
+                            Open Link
+                          </a>
+                        )}
 
-                      {place.source_url && (
-                        <a
-                          href={place.source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:bg-slate-700"
+                        <button
+                          onClick={() => requestDeletePlace(place)}
+                          className="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
                         >
-                          Open Link
-                        </a>
-                      )}
+                          Delete
+                        </button>
+                      </div>
 
-                      <button
-                        onClick={() => requestDeletePlace(place)}
-                        className="rounded-lg border border-red-500/40 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10"
-                      >
-                        Delete
-                      </button>
+                      <p className="mt-4 text-xs text-slate-500">
+                        Saved: {new Date(place.created_at).toLocaleString()}
+                      </p>
                     </div>
-
-                    <p className="mt-4 text-xs text-slate-500">
-                      Saved: {new Date(place.created_at).toLocaleString()}
-                    </p>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-slate-400">
-              No places found. Use the Chat page to save places like: “I want to
-              visit Central Park in New York.”
-            </p>
-          )}
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-400">
+                No places found. Use the Chat page to save places like: “I want to
+                visit Central Park in New York.”
+              </p>
+            )}
+          </div>
         </section>
       </div>
 

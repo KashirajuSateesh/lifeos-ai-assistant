@@ -241,7 +241,7 @@ export default function TasksPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+        <section className="flex max-h-[75vh] min-h-[500px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-bold">All Tasks</h2>
@@ -273,22 +273,24 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-slate-400">Loading tasks...</p>
-          ) : tasks.length === 0 ? (
-            <p className="text-slate-400">No tasks found.</p>
-          ) : (
-            <div className="space-y-3">
-              {tasks.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={completeTask}
-                  onDelete={requestDeleteTask}
-                />
-              ))}
-            </div>
-          )}
+          <div className="lifeos-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+            {loading ? (
+              <p className="text-slate-400">Loading tasks...</p>
+            ) : tasks.length === 0 ? (
+              <p className="text-slate-400">No tasks found.</p>
+            ) : (
+              <div className="space-y-3">
+                {tasks.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={completeTask}
+                    onDelete={requestDeleteTask}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 

@@ -369,7 +369,7 @@ export default function ExpensesPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+        <section className="flex max-h-[75vh] min-h-[500px] flex-col rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
           <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-center">
             <div>
               <h2 className="text-2xl font-bold">Transactions</h2>
@@ -386,135 +386,137 @@ export default function ExpensesPage() {
             </button>
           </div>
 
-          {loading ? (
-            <p className="text-slate-400">Loading expenses...</p>
-          ) : expenses.length === 0 ? (
-            <p className="text-slate-400">No transactions found.</p>
-          ) : (
-            <div className="space-y-3">
-              {expenses.map((expense) => (
-                <div
-                  key={expense.id}
-                  className="rounded-xl border border-slate-700 bg-slate-800 p-4"
-                >
-                  {editingExpense?.id === expense.id ? (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                        <input
-                          type="number"
-                          value={editAmount}
-                          onChange={(event) => setEditAmount(event.target.value)}
-                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                          placeholder="Amount"
-                        />
+          <div className="lifeos-scrollbar min-h-0 flex-1 overflow-y-auto pr-2">
+            {loading ? (
+              <p className="text-slate-400">Loading expenses...</p>
+            ) : expenses.length === 0 ? (
+              <p className="text-slate-400">No transactions found.</p>
+            ) : (
+              <div className="lifeos-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+                {expenses.map((expense) => (
+                  <div
+                    key={expense.id}
+                    className="rounded-xl border border-slate-700 bg-slate-800 p-4"
+                  >
+                    {editingExpense?.id === expense.id ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                          <input
+                            type="number"
+                            value={editAmount}
+                            onChange={(event) => setEditAmount(event.target.value)}
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                            placeholder="Amount"
+                          />
 
-                        <input
-                          type="text"
-                          value={editCategory}
-                          onChange={(event) =>
-                            setEditCategory(event.target.value)
-                          }
-                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                          placeholder="Category"
-                        />
+                          <input
+                            type="text"
+                            value={editCategory}
+                            onChange={(event) =>
+                              setEditCategory(event.target.value)
+                            }
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                            placeholder="Category"
+                          />
 
-                        <select
-                          value={editTransactionType}
-                          onChange={(event) =>
-                            setEditTransactionType(
-                              event.target.value as "debit" | "credit"
-                            )
-                          }
-                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                        >
-                          <option value="debit">Debit</option>
-                          <option value="credit">Credit</option>
-                        </select>
-
-                        <input
-                          type="text"
-                          value={editDescription}
-                          onChange={(event) =>
-                            setEditDescription(event.target.value)
-                          }
-                          className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
-                          placeholder="Description"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={saveEdit}
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700"
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          onClick={cancelEdit}
-                          className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-700"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-lg font-semibold">
-                            {expense.description || "Transaction"}
-                          </p>
-
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs ${
-                              expense.transaction_type === "credit"
-                                ? "bg-emerald-500/10 text-emerald-300"
-                                : "bg-red-500/10 text-red-300"
-                            }`}
+                          <select
+                            value={editTransactionType}
+                            onChange={(event) =>
+                              setEditTransactionType(
+                                event.target.value as "debit" | "credit"
+                              )
+                            }
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
                           >
-                            {expense.transaction_type}
-                          </span>
+                            <option value="debit">Debit</option>
+                            <option value="credit">Credit</option>
+                          </select>
+
+                          <input
+                            type="text"
+                            value={editDescription}
+                            onChange={(event) =>
+                              setEditDescription(event.target.value)
+                            }
+                            className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-3 text-white outline-none focus:border-blue-500"
+                            placeholder="Description"
+                          />
                         </div>
 
-                        <p className="mt-1 text-sm capitalize text-slate-400">
-                          {expense.category} ·{" "}
-                          {new Date(expense.created_at).toLocaleString()}
-                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={saveEdit}
+                            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+
+                          <button
+                            onClick={cancelEdit}
+                            className="rounded-lg border border-slate-600 px-4 py-2 text-sm hover:bg-slate-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-lg font-semibold">
+                              {expense.description || "Transaction"}
+                            </p>
 
-                      <div className="flex flex-wrap items-center gap-3">
-                        <p
-                          className={`text-xl font-bold ${
-                            expense.transaction_type === "credit"
-                              ? "text-emerald-300"
-                              : "text-red-300"
-                          }`}
-                        >
-                          {expense.transaction_type === "credit" ? "+" : "-"}$
-                          {Number(expense.amount).toFixed(2)}
-                        </p>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs ${
+                                expense.transaction_type === "credit"
+                                  ? "bg-emerald-500/10 text-emerald-300"
+                                  : "bg-red-500/10 text-red-300"
+                              }`}
+                            >
+                              {expense.transaction_type}
+                            </span>
+                          </div>
 
-                        <button
-                          onClick={() => startEdit(expense)}
-                          className="rounded-lg border border-slate-600 px-3 py-2 text-xs hover:bg-slate-700"
-                        >
-                          Edit
-                        </button>
+                          <p className="mt-1 text-sm capitalize text-slate-400">
+                            {expense.category} ·{" "}
+                            {new Date(expense.created_at).toLocaleString()}
+                          </p>
+                        </div>
 
-                        <button
-                          onClick={() => requestDeleteExpense(expense)}
-                          className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
-                        >
-                          Delete
-                        </button>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p
+                            className={`text-xl font-bold ${
+                              expense.transaction_type === "credit"
+                                ? "text-emerald-300"
+                                : "text-red-300"
+                            }`}
+                          >
+                            {expense.transaction_type === "credit" ? "+" : "-"}$
+                            {Number(expense.amount).toFixed(2)}
+                          </p>
+
+                          <button
+                            onClick={() => startEdit(expense)}
+                            className="rounded-lg border border-slate-600 px-3 py-2 text-xs hover:bg-slate-700"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => requestDeleteExpense(expense)}
+                            className="rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 hover:bg-red-500/10"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
